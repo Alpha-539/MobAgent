@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "905223723470",
+    "project_id": "mob-agent-ai",
+    "storage_bucket": "mob-agent-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:905223723470:android:43ae8251f24416f6cab39f",
+        "android_client_info": {
+          "package_name": "com.mobagent.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "905223723470-fje3g371q0kj694j7r13ih35n55on902.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mobagent.app",
+            "certificate_hash": "c57b5c9c901c6b770e9e5b89354c4b7fdfd82861"
+          }
+        },
+        {
+          "client_id": "905223723470-ba9hjs5hi0ip793dd8thgbflpk9ll85q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDbac1_c2bA_mNpn-kHdYGsI8sNYhaM8u0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "905223723470-ba9hjs5hi0ip793dd8thgbflpk9ll85q.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

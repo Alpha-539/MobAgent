@@ -1,0 +1,131 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ "main" ]
+    # worker/ (Cloudflare) o'zgarganda APK qayta qurilmaydi
+    paths-ignore: [ "worker/**" ]
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore: [ "worker/**" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Google Play har yuklashda versionCode oshishini talab qiladi
+      VERSION_CODE: ${{ github.run_number }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: llama.cpp manba kodini yuklab olish
+        env:
+          # master doim o'zgarib turadi va libllama API'sini buzishi mumkin
+          # (masalan, llama_load_model_from_file -> llama_model_load_from_file
+          # kabi nom o'zgarishlari bo'lgan). Shuning uchun native kod aynan shu
+          # tag bilan sinovdan o'tkazilgan; yangilashni xohlasangiz, tag'ni
+          # o'zgartiring va app/src/main/cpp/llama-android.cpp'ni qayta tekshiring.
+          LLAMA_TAG: b11017
+        run: |
+          LLAMA_DIR="app/src/main/cpp/llama.cpp"
+          if [ ! -f "$LLAMA_DIR/CMakeLists.txt" ]; then
+            echo "llama.cpp ($LLAMA_TAG) GitHub'dan klonlanyapti..."
+            rm -rf "$LLAMA_DIR"
+            git clone --depth 1 --branch "$LLAMA_TAG" https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"
+          else
+            echo "llama.cpp allaqachon mavjud, klonlash shart emas."
+          fi
+
+      - name: JDK 17 o'rnatish
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ubuntu-latest runner'ida Android SDK oldindan o'rnatilgan bo'ladi
+      # (ANDROID_HOME / ANDROID_SDK_ROOT), shuning uchun alohida
+      # setup-android action shart emas — u eskirgan "tools" paketini
+      # izlab xato berardi.
+      - name: SDK litsenziyalarini qabul qilish va NDK o'rnatish
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME" -name sdkmanager -type f 2>/dev/null | head -n 1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager topilmadi, ANDROID_HOME=$ANDROID_HOME"
+            find "$ANDROID_HOME" -maxdepth 3
+            exit 1
+          fi
+          echo "Topildi: $SDKMANAGER"
+          export PATH="$(dirname "$SDKMANAGER"):$PATH"
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> $GITHUB_ENV
+
+      # Repo ichida gradlew (wrapper jar) yo'q, shuning uchun
+      # Gradle to'g'ridan-to'g'ri shu action orqali o'rnatiladi va ishlatiladi
+      - name: Gradle o'rnatish
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.13
+
+      # proot + loader + libtalloc + libandroid-shmem ni jniLibs ichiga qo'yadi.
+      # Bu bosqichsiz APK'da proot bo'lmaydi yoki libandroid-shmem.so yetishmaydi.
+      - name: proot kutubxonalarini yuklash
+        run: |
+          chmod +x scripts/fetch-proot.sh
+          scripts/fetch-proot.sh
+          for f in libproot.so libproot-loader.so libtalloc.so libandroid-shmem.so; do
+            test -f "app/src/main/jniLibs/arm64-v8a/$f" || { echo "::error::$f yo'q"; exit 1; }
+          done
+
+      # Ubuntu rootfs APK ichiga ixcham .tar.xz qilib qo'yiladi (Google Play tashqaridan yuklashni yoqtirmaydi).
+      - name: Ubuntu rootfs'ni tayyorlash (APK ichiga)
+        run: |
+          chmod +x scripts/build-rootfs.sh
+          scripts/build-rootfs.sh
+          test -s app/src/main/assets/linux/ubuntu-base-arm64.tar.xz || { echo "::error::rootfs yo'q"; exit 1; }
+
+      - name: Debug APK yig'ish
+        run: gradle assembleDebug --stacktrace
+
+      - name: APK ni artifact sifatida yuklash
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobagent-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          # Saqlash joyi (quota) tez to'lmasligi uchun: 1 kundan keyin o'chadi
+          retention-days: 1
+          # APK allaqachon siqilgan, qayta siqish vaqt va joyni behuda sarflaydi
+          compression-level: 0
+
+      # ---- Release (Google Play uchun AAB) ----
+      # Repo Settings > Secrets and variables > Actions ga qo'shing:
+      #   KEYSTORE_BASE64 (base64 -w0 upload.jks), KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+      # Secrets yo'q bo'lsa (yoki pull request bo'lsa) bu bosqich o'tkazib yuboriladi.
+      - name: Release AAB yig'ish (imzolangan)
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "KEYSTORE_BASE64 secret yo'q — release bosqichi o'tkazib yuborildi."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          export KEYSTORE_FILE="$RUNNER_TEMP/upload.jks"
+          gradle bundleRelease --stacktrace
+          rm -f "$RUNNER_TEMP/upload.jks"
+
+      - name: AAB ni artifact sifatida yuklash
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobagent-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: ignore
+          retention-days: 1
+          compression-level: 0

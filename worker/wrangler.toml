@@ -1,0 +1,66 @@
+name = "mobagent"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Kunlik API xarajat chegarasi (USD) — provayder balansi kutilmaganda tugab qolmasligi uchun xavfsizlik qatlami. Qo'ying: 
+# DAILY_SPEND_CAP_USD = "20"
+# Firebase loyihasi (app/google-services.json -> project_id)
+FIREBASE_PROJECT_ID = "mob-agent-ai"
+# Maxfiylik siyosati va o'chirish sahifasida ko'rsatiladi — O'ZINGIZNIKI bilan almashtiring
+CONTACT_EMAIL = "mob.agent.app@gmail.com"
+APP_NAME = "MobAgent"
+# Bosh sahifadagi tarif narxlari — Play Console'dagi HAQIQIY narxni yozing (bo'sh qolsa "Narxi Google Play'da" ko'rinadi):
+# PRICE_BASIC = "$5 / oy"
+# PRICE_STANDARD = "$15 / oy"
+# PRICE_PRO = "$30 / oy"
+# Google Play ilovasining paket nomi (obunani tekshirish uchun)
+PLAY_PACKAGE = "com.mobagent.app"
+# Cloudflare Access (Zero Trust) sozlangach to'ldiring. Bo'sh bo'lsa admin faqat ADMIN_TOKEN bilan ochiladi.
+ACCESS_TEAM_DOMAIN = ""   # masalan: jamoam.cloudflareaccess.com
+ACCESS_AUD = ""           # Access ilovasining "Application Audience (AUD) Tag"
+
+# ---- Tasdiqlash / parol tiklash xatlarini o'z domenimizdan yuborish ----
+# 1) Jo'natuvchi manzil (domen Cloudflare Email Service'da tasdiqlangan bo'lishi kerak). Bo'sh = o'chiq, ilova Firebase'ning xatiga qaytadi.
+MAIL_FROM = "MobAgent@mail.uz-x.info"   # Resend'da tasdiqlangan domen/manzil bo'lishi shart
+# 2) Cloudflare Email Service binding (Workers Paid). Resend ishlatsangiz, bu blokni o'chirib, RESEND_API_KEY secret qo'ying.
+# [[send_email]]
+# name = "EMAIL"
+# Sirlar: wrangler secret put FIREBASE_SERVICE_ACCOUNT  (Firebase -> Project settings -> Service accounts -> Generate new private key, JSON to'liq matn)
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mobagent"
+database_id = "e55b9682-5018-4d50-accd-09e642e1da2a"
+
+# Eski statistika yozuvlarini tozalash (har kuni 03:00 UTC)
+[triggers]
+crons = ["0 3 * * *"]
+
+# ---- Bepul modellar "Gemini 3.8" va "GPT 4o mini" (uchinchi tomon servis: prexzyapis.com/ai/gemini, /ai/aiwriter-chat) ----
+# Servis ishlamay qolsa yoki muammo chiqsa, shuni oching — bepul modellar ro'yxatdan darrov yo'qoladi:
+# FREE_AI_DISABLED = "1"
+# Bitta foydalanuvchiga HAR BIR bepul model uchun 5 soatda nechta xabar (standart 15):
+# FREE_AI_LIMIT = "30000"   # tarifsiz foydalanuvchi: 5 soatda TOKEN (kirish + chiqish)
+
+# ---- Admin panel manzili ----
+# Standart manzil: https://<worker>/alpha/maxfiy_sahifa  (/admin 404 beradi). O'zgartirish shart emas.
+# Boshqa manzil xohlasangiz: wrangler secret put ADMIN_PATH  (masalan: alpha/boshqa_yol — 1-4 bo'lak, harf/raqam/_/-)
+
+# Sirlar (wrangler secret put ...):
+#   ADMIN_TOKEN  — Access ishlatmasangiz, admin uchun uzun tasodifiy qator
+#   STATS_SALT   — kunlik faol foydalanuvchini anonim sanash uchun tasodifiy qator
+
+# ---- Pullik rejim: har foydalanuvchiga bitta byudjet hisobchisi (Durable Object, SQLite) ----
+[[durable_objects.bindings]]
+name = "USER_BUDGET"
+class_name = "UserBudget"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UserBudget"]
+
+# Qo'shimcha sirlar (Cloudflare -> Settings -> Variables and Secrets):
+#   PLAY_SERVICE_ACCOUNT — Google Cloud service account JSON (to'liq matn)
+#   RTDN_SECRET          — Pub/Sub push manziliga ?secret=... sifatida qo'yiladi
+#   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, MOONSHOT_API_KEY, DEEPSEEK_API_KEY — kamida bittasi

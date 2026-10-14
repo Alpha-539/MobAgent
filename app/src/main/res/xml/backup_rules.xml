@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 va undan eski: Auto Backup (fullBackupContent).
+     Model fayllari (bir necha GB) zaxiraga tushmasin; chat tarixi va sozlamalar saqlanib qoladi. -->
+<full-backup-content>
+    <exclude domain="file" path="models/" />
+    <exclude domain="sharedpref" path="online_api_keys.xml" />
+</full-backup-content>
