@@ -22,10 +22,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-data class CloudModelInfo(val id: String, val name: String, val tier: String, val locked: Boolean, val free: Boolean = false)
-
-/** Bepul model: 5 soatlik oynada nechta TOKEN ishlatilgani (used/limit — token; tarifsiz ham ishlaydi). */
-data class FreeInfo(val modelId: String, val used: Int, val limit: Int, val resetsAt: Long)
+data class CloudModelInfo(val id: String, val name: String, val tier: String, val locked: Boolean)
 
 /** Dollar miqdori ko'rsatilmaydi: faqat foiz (0..1) va tiklanish vaqti. */
 data class CloudPlan(
@@ -39,11 +36,7 @@ data class CloudPlan(
     val monthResetsAt: Long,
     val models: List<CloudModelInfo>,
     /** Qolgan credits ("kredit" birligida). Tarif bo'lmasa ham ishlatiladi. */
-    val credits: Long = 0L,
-    /** Birinchi bepul model holati (eski serverlar bilan mos); server o'chirib qo'ygan bo'lsa null. */
-    val free: FreeInfo? = null,
-    /** Barcha bepul modellar (har birining limiti alohida); server o'chirib qo'ygan bo'lsa bo'sh. */
-    val freeModels: List<FreeInfo> = emptyList()
+    val credits: Long = 0L
 )
 
 /** Tarif sahifasiga o'tib kelguncha yozilgan, hali yuborilmagan xabar (chat qayta ochilganda tiklanadi). */
@@ -58,21 +51,11 @@ object CloudApi {
     /** "MobAgent agents" bosilganda ochiladigan standart model (worker/src/plans.ts dagi id bilan bir xil). */
     const val DEFAULT_MODEL_ID = "claude-haiku-4-5"
     const val DEFAULT_MODEL_NAME = "Claude Haiku 4.5"
-    /** Bepul model (worker/src/plans.ts dagi FREE_MODEL bilan bir xil). Tarifsiz foydalanuvchi uchun standart. */
-    const val FREE_MODEL_ID = "gpt-4o-mini-free"
-    const val FREE_MODEL_NAME = "GPT 4o mini"
     private val json = Json { ignoreUnknownKeys = true }
 
     private fun errorOf(body: String): String? = runCatching {
         json.parseToJsonElement(body).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
     }.getOrNull()
-
-    private fun freeInfoOf(f: JsonObject): FreeInfo? = FreeInfo(
-        modelId = f["modelId"]?.jsonPrimitive?.contentOrNull ?: return null,
-        used = f["used"]?.jsonPrimitive?.longOrNull?.toInt() ?: 0,
-        limit = f["limit"]?.jsonPrimitive?.longOrNull?.toInt() ?: 0,
-        resetsAt = f["resetsAt"]?.jsonPrimitive?.longOrNull ?: 0L
-    )
 
     /** Joriy tarif va foydalanish. Xato bo'lsa null. */
     suspend fun plan(): CloudPlan? {
@@ -96,12 +79,9 @@ object CloudApi {
                         id = m["id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
                         name = m["name"]?.jsonPrimitive?.contentOrNull ?: m["id"]!!.jsonPrimitive.content,
                         tier = m["tier"]?.jsonPrimitive?.contentOrNull ?: "medium",
-                        locked = m["locked"]?.jsonPrimitive?.booleanOrNull ?: false,
-                        free = m["free"]?.jsonPrimitive?.booleanOrNull ?: false
+                        locked = m["locked"]?.jsonPrimitive?.booleanOrNull ?: false
                     )
-                }.orEmpty(),
-                free = (o["free"] as? JsonObject)?.let { freeInfoOf(it) },
-                freeModels = o["freeModels"]?.jsonArray?.mapNotNull { e -> (e as? JsonObject)?.let { freeInfoOf(it) } }.orEmpty()
+                }.orEmpty()
             )
         } catch (_: Exception) {
             null

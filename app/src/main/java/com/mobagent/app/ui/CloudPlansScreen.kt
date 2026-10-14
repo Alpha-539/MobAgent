@@ -177,7 +177,6 @@ fun CloudPlansScreen(
                         Text(
                             when {
                                 m.locked -> tr("Yuqoriroq tarifda")
-                                m.free -> tr("Bepul")
                                 m.tier == "strong" -> tr("Kuchli")
                                 else -> tr("O'rtacha")
                             },
@@ -200,23 +199,6 @@ fun CloudPlansScreen(
         } else if (planLoaded && p == null) {
             Text(tr("Tarif holatini olib bo'lmadi. Internetni tekshiring."), color = DangerText, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp))
-        }
-
-        // ---- Bepul model (tarifsiz ham, kirgan foydalanuvchi uchun) ----
-        val frees = p?.freeModels?.takeIf { it.isNotEmpty() } ?: listOfNotNull(p?.free)
-        if (frees.isNotEmpty()) {
-            Card {
-                Text(if (p?.planId != null) tr("5 soatda %1\$s token", fmtTokens(frees.first().limit)) else tr("Tarifsiz ham ishlaydi: 5 soatda %1\$s token", fmtTokens(frees.first().limit)), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.height(10.dp))
-                // Barcha bepul modellar uchun BITTA umumiy limit (hisoblagich server tomonida umumiy).
-                val f = frees.first()
-                val left = (f.limit - f.used).coerceAtLeast(0)
-                UsageBar(
-                    tr("Qolgan tokenlar: %1\$s / %2\$s", fmtTokens(left), fmtTokens(f.limit)),
-                    (f.used.toDouble() / f.limit.coerceAtLeast(1)), f.resetsAt
-                )
-            }
-            Spacer(Modifier.height(16.dp))
         }
 
         // ---- Tariflar (xarid) ----
@@ -339,12 +321,4 @@ private fun BuyButton(text: String, modifier: Modifier, onClick: () -> Unit) {
     ) {
         Text(text, color = androidx.compose.ui.graphics.Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
-}
-
-
-/** Token sonini qisqa ko'rsatadi: 950 -> "950", 12300 -> "12.3K", 1500000 -> "1.5M". */
-private fun fmtTokens(n: Int): String = when {
-    n >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", n / 1_000_000.0).replace(".0M", "M")
-    n >= 1_000 -> String.format(java.util.Locale.US, "%.1fK", n / 1_000.0).replace(".0K", "K")
-    else -> n.toString()
 }

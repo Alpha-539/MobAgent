@@ -1,11 +1,10 @@
 import { verifyFirebase, type FirebaseUser } from "./auth";
 import type { BudgetStatus } from "./budget";
 import { acknowledge, consumePurchase, getOneTimePurchase, getSubscription } from "./play";
-import { CLOUD_MODELS, CREDIT_ONLY_RANK, FREE_MAX_PROMPT_CHARS, CREDIT_PRODUCTS, estTokens, MICRO, PLANS, PRODUCT_TO_PLAN, byModelId, type CloudModel, type PlanId, type Provider } from "./plans";
+import { CLOUD_MODELS, CREDIT_ONLY_RANK, CREDIT_PRODUCTS, MICRO, PLANS, PRODUCT_TO_PLAN, byModelId, type CloudModel, type PlanId, type Provider } from "./plans";
 import type { Env } from "./types";
 import { json } from "./util";
 import { loadOffModels } from "./cloudmodels";
-import { callUpstream, limitFor, loadFreeAi, type FreeAiState, type ResolvedFreeModel, type Tier } from "./freeai";
 
 const MAX_BODY_BYTES = 8_000_000;
 const MAX_MESSAGES = 200;
@@ -302,10 +301,6 @@ async function chatCompletions(req: Request, env: Env, ctx: ExecutionContext): P
   let body: { model?: unknown; messages?: unknown; max_tokens?: unknown; max_completion_tokens?: unknown; temperature?: unknown };
   try { body = await req.json(); } catch { return errJson(400, "JSON kerak", "bad_request"); }
 
-  const fr = await loadFreeAi(env);
-  const fm = fr.all.find((m) => m.id === body.model);
-  if (fm) return freeChat(env, u.uid, body.messages, fm, fr, ctx);
-
   const cm = typeof body.model === "string" ? byModelId(body.model) : undefined;
   if (!cm || cm.enabled === false || (await loadOffModels(env)).has(cm.id) || !providerKey(env, cm.provider)) return errJson(404, "Model topilmadi", "model_not_found");
   const msgs = normalize(body.messages);
@@ -484,103 +479,6 @@ async function pump(
 
 // ───────────────────────── Bepul model (uchinchi tomon servis) ─────────────────────────
 
-/**
- * Suhbatni bitta matnga yig'adi (servis faqat `prompt` oladi). Oxirgi xabarlar saqlanadi, eskilari kesiladi.
- * Faqat bitta foydalanuvchi xabari bo'lsa — o'sha matnning o'zi yuboriladi.
- */
-function freePrompt(msgs: Msg[]): string {
-  const text = (m: Msg) => m.parts.map((x) => (x.t === "text" ? x.text : "")).join("\n").trim();
-  const sys = msgs.filter((m) => m.role === "system").map(text).filter(Boolean).join("\n");
-  const turns = msgs.filter((m) => m.role !== "system").map((m) => ({ role: m.role, t: text(m) })).filter((x) => x.t);
-  if (turns.length === 1 && turns[0].role === "user" && !sys) return turns[0].t.slice(-FREE_MAX_PROMPT_CHARS);
-  const head = sys ? `${sys}\n\n` : "";
-  const tail = "\n\nReply only as the Assistant to the last User message, in the language the user wrote in.";
-  const lines: string[] = [];
-  let used = head.length + tail.length;
-  for (let i = turns.length - 1; i >= 0; i--) {
-    const line = `${turns[i].role === "user" ? "User" : "Assistant"}: ${turns[i].t}`;
-    if (used + line.length > FREE_MAX_PROMPT_CHARS && lines.length > 0) break;
-    lines.unshift(line.length > FREE_MAX_PROMPT_CHARS ? line.slice(-FREE_MAX_PROMPT_CHARS) : line);
-    used += line.length + 1;
-  }
-  return `${head}Conversation:\n${lines.join("\n")}\nAssistant:${tail}`;
-}
-
-async function freeChat(env: Env, uid: string, rawMsgs: unknown, fm: ResolvedFreeModel, fr: FreeAiState, ctx: ExecutionContext): Promise<Response> {
-  if (!fr.enabled || !fm.on) return errJson(503, "Bu bepul model vaqtincha o'chirilgan.", "free_disabled");
-  const msgs = normalize(rawMsgs);
-  if (typeof msgs === "string") return errJson(400, msgs, "bad_request");
-  if (msgs.some((m) => m.parts.some((x) => x.t === "img"))) {
-    return errJson(400, "Bu model rasmni qabul qilmaydi. Rasm uchun boshqa modelni tanlang.", "no_vision");
-  }
-  // Limit tarifga bog'liq: tarifsiz < Boshlang'ich < O'rta < Pro (admin paneldan o'zgartiriladi). Har model uchun alohida hisoblagich.
-  let tier: Tier = "free";
-  try { tier = (await syncUser(env, uid)).planId ?? "free"; } catch { /* tarif aniqlanmasa — tarifsiz limit */ }
-  const limit = limitFor(fr, tier, fm.id);
-  const stub = budgetOf(env, uid);
-  const take = await stub.freeCheck(limit, fm.id);
-  if (!take.ok) {
-    const wait = Math.max(0, take.resetsAt - Date.now());
-    const msg = tier === "free"
-      ? `Bepul limit tugadi (5 soatda ${limit} token). Taxminan ${humanWait(wait)} keyin tiklanadi yoki tarif tanlang.`
-      : `Limit tugadi (5 soatda ${limit} token). Taxminan ${humanWait(wait)} keyin tiklanadi.`;
-    return errJson(429, msg, "limit_free", { "retry-after": String(Math.ceil(wait / 1000)) });
-  }
-
-  // Servis javobni bo'laklab emas, tayyor holda qaytaradi. Shuning uchun oqim DARHOL ochiladi: ilova "ulandi" ni ko'radi,
-  // javob kutilayotganda har ~8 soniyada SSE izohi (": ping") yuboriladi — ulanish uzilmaydi (ilova va oraliq proksilar
-  // jim ulanishni o'ldirmaydi). Xato bo'lsa HTTP status allaqachon 200, shuning uchun xato oqim ichida (`error`) yuboriladi.
-  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
-  ctx.waitUntil(pumpFree(stub, fm, fr, freePrompt(msgs), writable));
-  return new Response(readable, {
-    headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" },
-  });
-}
-
-/** Bepul model javobini kutadi (uzun fikrlaydigan modellar uchun uzoqroq vaqt) va OpenAI SSE formatida uzatadi. */
-const FREE_UPSTREAM_TIMEOUT_MS = 150_000;
-const FREE_HEARTBEAT_MS = 8_000;
-
-async function pumpFree(
-  stub: DurableObjectStub<import("./budget").UserBudget>,
-  fm: ResolvedFreeModel, fr: FreeAiState, prompt: string, writable: WritableStream<Uint8Array>,
-): Promise<void> {
-  const writer = writable.getWriter();
-  const enc = new TextEncoder();
-  let open = true; // ilova uzilib ketgan bo'lsa yozish xato beradi — keyingi yozuvlar o'tkazib yuboriladi
-  const send = async (s: string) => {
-    if (!open) return;
-    try { await writer.write(enc.encode(s)); } catch { open = false; }
-  };
-  const id = `chatcmpl-${crypto.randomUUID()}`;
-  const chunk = (delta: Record<string, unknown>, finish: string | null) =>
-    `data: ${JSON.stringify({ id, object: "chat.completion.chunk", model: fm.id, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
-  const timer = setInterval(() => { void send(": ping\n\n"); }, FREE_HEARTBEAT_MS);
-  try {
-    await send(": connected\n\n");
-    await send(chunk({ role: "assistant" }, null));
-    const up = await callUpstream(fr, fm, prompt, FREE_UPSTREAM_TIMEOUT_MS);
-    if (!up.text) console.error("free upstream", fm.id, up.status);
-    let text = up.text;
-    // Servis ba'zan javobdagi qo'shtirnoqlarni ikki marta escape qiladi (\\"action\\":...). Ilovaning agent rejimi
-    // asbob chaqiruvini (JSON) shunda taniy olmay, uni oddiy matn qilib ko'rsatadi — faqat shu holatda tuzatamiz.
-    if (/\{\s*\\"[A-Za-z_]+\\"\s*:/.test(text)) text = text.replace(/\\"/g, '"').replace(/\\n/g, "\n");
-    if (!text) {
-      // Servis xato berdi — hech narsa hisobga olinmaydi (token faqat muvaffaqiyatli javobdan keyin yechiladi).
-      await send(`data: ${JSON.stringify({ error: { message: "Bepul AI xizmati hozir ishlamayapti. Birozdan keyin urinib ko'ring yoki boshqa modelni tanlang.", code: "upstream_error" } })}\n\n`);
-      return;
-    }
-    // Limit TOKEN bilan hisoblanadi: kirish (prompt) + chiqish (javob). Servis usage qaytarmaydi — matn uzunligidan baholanadi.
-    try { await stub.freeAdd(estTokens(prompt.length) + estTokens(text.length), fm.id); } catch { console.error("freeAdd failed"); }
-    for (let i = 0; i < text.length; i += 48) await send(chunk({ content: text.slice(i, i + 48) }, null));
-    await send(chunk({}, "stop"));
-    await send("data: [DONE]\n\n");
-  } finally {
-    clearInterval(timer);
-    try { await writer.close(); } catch { /* */ }
-  }
-}
-
 // ───────────────────────── Yo'naltirish ─────────────────────────
 
 export async function handleCloud(req: Request, env: Env, ctx: ExecutionContext, path: string, url: URL): Promise<Response | null> {
@@ -598,23 +496,9 @@ export async function handleCloud(req: Request, env: Env, ctx: ExecutionContext,
     const paid = (await enabledModels(env)).map((cm) => ({
       id: cm.id, object: "model", owned_by: cm.provider, name: cm.name, tier: cm.tier, locked: rank < cm.minRank,
     }));
-    const fr = await loadFreeAi(env);
-    const hasFree = fr.enabled && fr.active.length > 0;
-    const freeEntries = hasFree
-      ? fr.active.map((f) => ({ id: f.id, object: "model", owned_by: "free", name: f.name, tier: f.tier, locked: false, free: f.showFree }))
-      : [];
-    const models = [...freeEntries, ...paid];
-    if (path === "/me/plan") {
-      let freeModels: { modelId: string; used: number; limit: number; resetsAt: number }[] = [];
-      if (hasFree) {
-        const b = budgetOf(env, u.uid);
-        const tier: Tier = st.planId ?? "free";
-        freeModels = await Promise.all(fr.active.map(async (f) => ({ modelId: f.id, ...(await b.freeStatus(limitFor(fr, tier, f.id), f.id)) })));
-      }
-      // `free` — eski ilova versiyalari uchun (birinchi bepul model); yangilari `freeModels` ni o'qiydi.
-      return json({ ...st, models, free: freeModels[0] ?? null, freeModels });
-    }
-    if (!st.planId && st.credits <= 0 && !hasFree) return errJson(402, "Pullik tarif kerak", "no_plan");
+    const models = paid;
+    if (path === "/me/plan") return json({ ...st, models });
+    if (!st.planId && st.credits <= 0) return errJson(402, "Pullik tarif kerak", "no_plan");
     return json({ object: "list", data: models.filter((x) => !x.locked) });
   }
   return null;

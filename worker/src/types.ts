@@ -38,13 +38,6 @@ export interface Env {
   RESEND_API_KEY?: string;
   /** Firebase Admin service account JSON (secret): havola yaratish uchun. */
   FIREBASE_SERVICE_ACCOUNT?: string;
-  // ---- Bepul model (uchinchi tomon servis orqali) ----
-  /** "1" bo'lsa bepul model o'chiriladi (servis ishlamay qolsa shuni qo'ying). */
-  FREE_AI_DISABLED?: string;
-  /** Tarifsiz foydalanuvchiga 5 soatda nechta TOKEN (kirish + chiqish; standart 30000). */
-  FREE_AI_LIMIT?: string;
-  /** Servis manzili (standart https://prexzyapis.com). */
-  FREE_AI_BASE?: string;
 }
 
 export const CATEGORIES = ["CODING", "CHAT", "TRANSLATION", "REASONING"] as const;

@@ -1064,57 +1064,20 @@ fun ChatScreen(
                 }
             }
         }
-        // Bepul model tanlangan bo'lsa, tarifsiz ham xabar yuboriladi (faqat 5 soatlik bepul limit bor).
-        // Hisoblagich barcha bepul modellar uchun umumiy (server tomonida bitta), shuning uchun limit ham bitta.
-        val freeInfo = cloudPlan?.let { cp ->
-            cp.freeModels.firstOrNull { it.modelId == onlineCfg?.model } ?: cp.free
-        }
-        val onFreeModel = isCloud && freeInfo != null && onlineCfg?.model == freeInfo.modelId
-        val cloudNoPlan = isCloud && !onFreeModel && cloudPlan != null && cloudPlan?.planId == null && (cloudPlan?.credits ?: 0L) <= 0L
-        val freeLimitHit = onFreeModel && freeInfo != null && freeInfo.limit > 0 &&
-            freeInfo.used >= freeInfo.limit && freeInfo.resetsAt > System.currentTimeMillis()
-        if (freeLimitHit && freeInfo != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    tr("Bepul limit tugadi. Tiklanadi: %1\$s", java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(freeInfo.resetsAt))),
-                    color = TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f)
-                )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(AccentPurple)
-                        .clickable { com.mobagent.app.billing.PendingPrompt.put(input); onOpenPlans() }
-                        .padding(horizontal = 14.dp, vertical = 7.dp)
-                ) {
-                    Text(tr("Upgrade"), color = BgApp, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-            }
-        }
-        // 90% ogohlantirish: bepul modelda token limiti, pullik tarifda esa 5 soatlik/haftalik/oylik limitdan eng to'ldirilgani.
+        val cloudNoPlan = isCloud && cloudPlan != null && cloudPlan?.planId == null && (cloudPlan?.credits ?: 0L) <= 0L
+        // 90% ogohlantirish: pullik tarifda 5 soatlik/haftalik/oylik limitdan eng to'ldirilgani.
         val warnRatio: Double
         val warnResetsAt: Long
-        val warnPaid: Boolean
-        if (onFreeModel && freeInfo != null && freeInfo.limit > 0) {
-            warnRatio = freeInfo.used.toDouble() / freeInfo.limit
-            warnResetsAt = freeInfo.resetsAt
-            warnPaid = false
-        } else if (isCloud && cloudPlan?.planId != null) {
+        if (isCloud && cloudPlan?.planId != null) {
             val cp = cloudPlan!!
             val scopes = listOf(cp.windowUsed to cp.windowResetsAt, cp.weekUsed to cp.weekResetsAt, cp.monthUsed to cp.monthResetsAt)
             val top = scopes.maxByOrNull { it.first }!!
             warnRatio = top.first
             warnResetsAt = top.second
-            warnPaid = true
         } else {
-            warnRatio = 0.0; warnResetsAt = 0L; warnPaid = false
+            warnRatio = 0.0; warnResetsAt = 0L
         }
-        if (!freeLimitHit && warnRatio >= 0.9 && limitWarnDismissedFor != warnResetsAt) {
+        if (warnRatio >= 0.9 && limitWarnDismissedFor != warnResetsAt) {
             val pct = "${minOf(100, (warnRatio * 100).toInt())}%"
             Row(
                 modifier = Modifier
@@ -1124,8 +1087,7 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    if (warnPaid) tr("Tarif limiti deyarli tugadi: %1\$s ishlatildi", pct)
-                    else tr("Bepul limit deyarli tugadi: %1\$s ishlatildi", pct),
+                    tr("Tarif limiti deyarli tugadi: %1\$s ishlatildi", pct),
                     color = TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f)
                 )
                 Box(
@@ -1160,17 +1122,16 @@ fun ChatScreen(
             AlertDialog(
                 onDismissRequest = { showPaywall = false },
                 containerColor = BgCardElevated,
-                title = { Text(if (freeLimitHit) tr("Bepul limit tugadi") else tr("Tarif kerak"), color = TextPrimary, fontSize = 17.sp) },
+                title = { Text(tr("Tarif kerak"), color = TextPrimary, fontSize = 17.sp) },
                 text = {
                     Text(
-                        if (freeLimitHit) tr("Bepul tokenlar tugadi. Davom etish uchun tarifni yangilang — yozgan xabaringiz saqlanib turadi.")
-                        else tr("Bu modellar pullik tarif orqali ishlaydi. Tarifni tanlang — yozgan xabaringiz saqlanib turadi."),
+                        tr("Bu modellar pullik tarif orqali ishlaydi. Tarifni tanlang — yozgan xabaringiz saqlanib turadi."),
                         color = TextSecondary, fontSize = 14.sp
                     )
                 },
                 confirmButton = {
                     TextButton(onClick = { showPaywall = false; onOpenPlans() }) {
-                        Text(if (freeLimitHit) tr("Upgrade") else tr("Tariflarni ko'rish"), color = AccentPurpleText)
+                        Text(tr("Tariflarni ko'rish"), color = AccentPurpleText)
                     }
                 },
                 dismissButton = {
@@ -1270,7 +1231,7 @@ fun ChatScreen(
                         .background(if (canSend) TextPrimary else BgCardElevated)
                         .clickable(enabled = canSend) {
                             // Pullik rejim: tarif yo'q bo'lsa xabar yuborilmaydi — tarif taklif qilinadi.
-                            if (cloudNoPlan || freeLimitHit) {
+                            if (cloudNoPlan) {
                                 com.mobagent.app.billing.PendingPrompt.put(input)
                                 showPaywall = true
                                 return@clickable
@@ -1335,7 +1296,7 @@ fun ChatScreen(
                         if (models.isEmpty()) {
                             DropdownMenuItem(text = { Text(tr("Yuklanmoqda..."), color = TextMuted, fontSize = 13.sp) }, onClick = {}, enabled = false)
                         }
-                        models.sortedWith(compareBy({ !it.free }, { it.tier != "medium" })).forEach { m ->
+                        models.sortedBy { it.tier != "medium" }.forEach { m ->
                             // Tarifsiz foydalanuvchi hamma modelni ko'ra va tanlay oladi; qulf faqat tarifi pastroq bo'lsa.
                             val lockedForUser = (cloudPlan?.planId != null || (cloudPlan?.credits ?: 0L) > 0L) && m.locked
                             DropdownMenuItem(
@@ -1343,9 +1304,6 @@ fun ChatScreen(
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(m.name, color = if (lockedForUser) TextMuted else TextPrimary, fontSize = 14.sp)
-                                            if (m.free) {
-                                                Text(tr("Bepul"), color = AccentPurpleText, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp))
-                                            }
                                             if (lockedForUser) {
                                                 Icon(Icons.Filled.Lock, contentDescription = null, tint = TextMuted, modifier = Modifier.padding(start = 8.dp).size(13.dp))
                                             } else if (m.id == curId) {
@@ -1378,7 +1336,6 @@ fun ChatScreen(
 
 /** Model tanlash menyusidagi qisqa izoh (o'zbekcha kalit; tr() bilan tarjima qilinadi). */
 private fun cloudModelNote(id: String, tier: String): String = when {
-    id.contains("o3-mini") -> "Mantiq va hisob-kitob uchun mo'ljallangan"
     listOf("opus", "fable", "astra", "gpt-5-5", "gpt-5-6-sol").any { id.contains(it) } ->
         "Eng kuchli: chuqur tahlil va katta loyihalar uchun, limitni eng tez sarflaydi"
     tier == "medium" -> "Tez va tejamkor: oddiy suhbatlar uchun qulay"

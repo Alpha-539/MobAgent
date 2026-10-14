@@ -37,12 +37,6 @@ database_id = "e55b9682-5018-4d50-accd-09e642e1da2a"
 [triggers]
 crons = ["0 3 * * *"]
 
-# ---- Bepul modellar "Gemini 3.8" va "GPT 4o mini" (uchinchi tomon servis: prexzyapis.com/ai/gemini, /ai/aiwriter-chat) ----
-# Servis ishlamay qolsa yoki muammo chiqsa, shuni oching — bepul modellar ro'yxatdan darrov yo'qoladi:
-# FREE_AI_DISABLED = "1"
-# Bitta foydalanuvchiga HAR BIR bepul model uchun 5 soatda nechta xabar (standart 15):
-# FREE_AI_LIMIT = "30000"   # tarifsiz foydalanuvchi: 5 soatda TOKEN (kirish + chiqish)
-
 # ---- Admin panel manzili ----
 # Standart manzil: https://<worker>/alpha/maxfiy_sahifa  (/admin 404 beradi). O'zgartirish shart emas.
 # Boshqa manzil xohlasangiz: wrangler secret put ADMIN_PATH  (masalan: alpha/boshqa_yol — 1-4 bo'lak, harf/raqam/_/-)

@@ -5,7 +5,6 @@ import { validateModel } from "./validate";
 import { adminCloudAction, adminCloudOverview, adminCloudUser } from "./cloud";
 import { handleAnnouncements } from "./announce";
 import { handleAppUpdate } from "./appupdate";
-import { handleFreeAi } from "./freeai";
 import { handleCloudModels } from "./cloudmodels";
 import { handleAdminFeedback } from "./feedback";
 import { adminActor, adminHistory, adminRevert, bindUpsert, logAudit, logModelChange, logModelChanges, snapOfInput, snapOfRow } from "./audit";
@@ -99,12 +98,6 @@ export async function handleAdmin(req: Request, env: Env, path: string, authed: 
   // ---- Ilovani yangilash eslatmasi ----
   if (path === "/admin/api/app-update") {
     const r = await handleAppUpdate(env, req, path, actor);
-    if (r) return r;
-  }
-
-  // ---- Bepul AI API'lar (modellar, tarif bo'yicha limitlar, servis manzili, tekshirish) ----
-  if (path === "/admin/api/free-ai" || path === "/admin/api/free-ai/test") {
-    const r = await handleFreeAi(env, req, path, actor);
     if (r) return r;
   }
 

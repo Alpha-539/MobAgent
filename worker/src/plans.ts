@@ -142,49 +142,4 @@ export const CLOUD_MODELS: CloudModel[] = [
     tier: "strong", minRank: 3, inPerM: 5, outPerM: 30, maxOut: 8192, minOut: 2048, vision: true },
 ];
 
-/**
- * BEPUL model: tarifsiz har bir (tizimga kirgan, emaili tasdiqlangan) foydalanuvchi ishlata oladi.
- * Uchinchi tomon servis (prexzyapis.com: /ai/gemini, /ai/aiwriter-chat) orqali ishlaydi — kafolat yo'q, shuning uchun
- * FREE_AI_DISABLED=1 bilan bir zumda o'chirib qo'yish mumkin. Pullik byudjetga tegmaydi.
- * name — foydalanuvchiga ko'rinadigan nom (servis aniq versiyani bildirmaydi — nomni haqiqatga mos qo'ying).
- */
-export interface FreeModel {
-  id: string;
-  name: string;
-  tier: "medium" | "strong";
-  /** Servisdagi yo'l (FREE_AI_BASE ga qo'shiladi) */
-  path: string;
-  /** Servis javobining shakli: "gemini" -> { response: string }, "aiwriter" -> { result: { text: string[] } } */
-  kind: "gemini" | "aiwriter";
-  /** aiwriter uchun: servisdagi model kodi (so'rovda `model` sifatida yuboriladi). */
-  upstream?: string;
-  /** true bo'lsa ilovada "Bepul" belgisi ko'rsatiladi. Pullik modellarning bepul limiti uchun false (limit baribir ishlaydi). */
-  showFree: boolean;
-}
-/** Barcha bepul modellar uchun UMUMIY hisoblagich: 5 soatda FREE_DEFAULT_LIMIT (yoki FREE_AI_LIMIT) TOKEN (kirish + chiqish). */
-export const FREE_MODELS: FreeModel[] = [
-  // /ai/aiwriter-chat modellari (servisning GET models ro'yxatidan; `upstream` = servisdagi code). Nomlar servis ko'rsatganidek —
-  // servis ba'zan nomni haqiqiy modeldan boshqacha yozadi, shuning uchun nomni haqiqatga mos qo'ying.
-  { id: "gpt-4o-mini-free", name: "GPT 4o mini", tier: "medium", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "gpt-4o-mini" },
-  { id: "aw-gpt-4o", name: "GPT-4o", tier: "strong", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "gpt-4o" },
-  { id: "aw-claude-sonnet-4-6", name: "Claude Sonnet 4.6", tier: "strong", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "claude-3.5-sonnet-v2" },
-  { id: "aw-grok-4-3", name: "Grok 4.3", tier: "strong", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "grok-beta" },
-  { id: "aw-o3-mini", name: "o3-mini", tier: "strong", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "o3-mini" },
-  { id: "aw-qwen-3-7-max", name: "Qwen 3.7 Max", tier: "strong", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "qwen-max" },
-  { id: "aw-deepseek-v3", name: "DeepSeek V3", tier: "medium", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "deepseek-v3" },
-  { id: "aw-gemini-3-5-flash", name: "Gemini 3.5 Flash", tier: "medium", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "gemini-2-pro" },
-  { id: "aw-gemini-3-1-flash", name: "Gemini 3.1 Flash", tier: "medium", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "gemini-2-flash" },
-  { id: "aw-llama-3-3-70b", name: "Llama 3.3 70B", tier: "medium", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "llama-3.3-70b" },
-  { id: "aw-qwen-3-5-122b", name: "Qwen 3.5 122B", tier: "medium", path: "/ai/aiwriter-chat", kind: "aiwriter", showFree: false, upstream: "qwen2.5-72b" },
-];
-/** Birinchi bepul model (eski ilovalar uchun `free` maydonida shu qaytariladi). */
-export const FREE_MODEL = FREE_MODELS[0];
-export const freeModelById = (id: unknown): FreeModel | undefined => FREE_MODELS.find((m) => m.id === id);
-export const FREE_DEFAULT_LIMIT = 30_000; //   5 soatda tokenlar soni (kirish + chiqish)
-/** Bepul servis token sonini qaytarmaydi — matn uzunligidan baholanadi (~3 belgi = 1 token, cloud.ts dagi pullik hisob bilan bir xil). */
-export const estTokens = (chars: number): number => Math.ceil(Math.max(0, chars) / 3);
-export const FREE_WINDOW_MS = WINDOW_MS;
-/** Servisga yuboriladigan matnning eng katta hajmi (belgi); oshsa eski xabarlar kesiladi. */
-export const FREE_MAX_PROMPT_CHARS = 12_000;
-
 export const byModelId = (id: string): CloudModel | undefined => CLOUD_MODELS.find((m) => m.id === id);

@@ -244,18 +244,12 @@ private fun SignedInRoot() {
                 onBack = { screen = Screen.Home },
                 // Pullik rejim: avval chatning o'zi ko'rinadi, tarif esa xabar yuborilganda so'raladi.
                 onConfirm = {
-                    // Tarifi/credits'i bor foydalanuvchi — pullik standart model; tarifsiz — bepul model.
-                    scope.launch {
-                        val p = com.mobagent.app.billing.CloudApi.plan()
-                        val paid = p != null && (p.planId != null || p.credits > 0L)
-                        val id = if (paid) com.mobagent.app.billing.CloudApi.DEFAULT_MODEL_ID else com.mobagent.app.billing.CloudApi.FREE_MODEL_ID
-                        val name = if (paid) com.mobagent.app.billing.CloudApi.DEFAULT_MODEL_NAME else com.mobagent.app.billing.CloudApi.FREE_MODEL_NAME
-                        screen = Screen.Chat(
-                            name,
-                            modelId = OnlineChatConfig(com.mobagent.app.billing.CloudApi.PROVIDER_ID, id).encode(),
-                            backTo = Screen.Online
-                        )
-                    }
+                    // Standart pullik model ochiladi; tarifi yo'q foydalanuvchiga xabar yuborilganda tarif taklif qilinadi.
+                    screen = Screen.Chat(
+                        com.mobagent.app.billing.CloudApi.DEFAULT_MODEL_NAME,
+                        modelId = OnlineChatConfig(com.mobagent.app.billing.CloudApi.PROVIDER_ID, com.mobagent.app.billing.CloudApi.DEFAULT_MODEL_ID).encode(),
+                        backTo = Screen.Online
+                    )
                 },
                 onOpenApiKeys = { screen = Screen.ApiKeys },
                 onMenuClick = { scope.launch { drawerState.open() } }

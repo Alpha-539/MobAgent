@@ -1,9 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
-import { FREE_WINDOW_MS, CREDIT_RESERVE_MAX, CREDIT_UNIT_MICRO, MAX_IN_FLIGHT, MICRO, MONTH_MS, PLANS, WEEK_MS, WEEK_SHARE, WINDOW_MS, WINDOW_SHARE, type PlanId } from "./plans";
+import { CREDIT_RESERVE_MAX, CREDIT_UNIT_MICRO, MAX_IN_FLIGHT, MICRO, MONTH_MS, PLANS, WEEK_MS, WEEK_SHARE, WINDOW_MS, WINDOW_SHARE, type PlanId } from "./plans";
 import type { Env } from "./types";
-
-/** Barcha bepul modellar uchun umumiy hisoblagich kaliti. */
-const FREE_SHARED_KEY = "free-shared";
 
 interface State {
   planId: PlanId | null;
@@ -21,11 +18,6 @@ interface State {
   credits: number;
   /** Oxirgi berilgan credits xaridlari (takroriy berishdan himoya). */
   grants: string[];
-  /** (eski) Faqat "gemini-free" uchun edi; endi freeUse ishlatiladi, qiymat u yerga ko'chiriladi. */
-  freeStart?: number;
-  freeCount?: number;
-  /** Bepul modellar: umumiy kalit -> joriy 5 soatlik oyna boshi va undagi sarflangan TOKENLAR (count = token). */
-  freeUse?: Record<string, { start: number; count: number }>;
 }
 
 export type Scope = "window" | "week" | "month";
@@ -60,12 +52,6 @@ export class UserBudget extends DurableObject<Env> {
     const s = (await this.ctx.storage.get<State>("st")) ?? { ...EMPTY, reserved: {}, grants: [] };
     s.credits ??= 0; // eski yozuvlarda bu maydon yo'q
     s.grants ??= [];
-    if (!s.freeUse) {
-      s.freeUse = {};
-      // Eski yozuvdagi hisoblagich Gemini'ga tegishli edi — yo'qolmasin.
-      if ((s.freeCount ?? 0) > 0) s.freeUse["gemini-free"] = { start: s.freeStart ?? 0, count: s.freeCount ?? 0 };
-      s.freeStart = 0; s.freeCount = 0;
-    }
     return s;
   }
   private save(s: State): Promise<void> {
@@ -206,47 +192,7 @@ export class UserBudget extends DurableObject<Env> {
     s.weekStart = 0; s.weekSpent = 0;
     s.monthStart = Date.now(); s.monthSpent = 0;
     s.reserved = {};
-    s.freeUse = {};
     await this.save(s);
-  }
-
-  /** Barcha bepul modellar BIR UMUMIY hisoblagichdan foydalanadi (modelga qarab ajratilmaydi). */
-  private rollFree(s: State, _id: string, now: number): { start: number; count: number } {
-    const id = FREE_SHARED_KEY;
-    const u = (s.freeUse ??= {});
-    const e = u[id] ?? { start: 0, count: 0 };
-    if (e.start !== 0 && now >= e.start + FREE_WINDOW_MS) { e.start = 0; e.count = 0; }
-    u[id] = e;
-    return e;
-  }
-
-  /** Bepul model: so'rovdan OLDIN chaqiriladi. Sarflangan TOKENLAR limitga yetgan bo'lsa ok:false va tiklanish vaqti. Hech narsa yechmaydi. */
-  async freeCheck(limit: number, modelId = "gemini-free"): Promise<{ ok: boolean; resetsAt: number }> {
-    const s = await this.load();
-    const now = Date.now();
-    const e = this.rollFree(s, modelId, now);
-    await this.save(s);
-    if (e.count >= limit) return { ok: false, resetsAt: (e.start || now) + FREE_WINDOW_MS };
-    return { ok: true, resetsAt: (e.start || now) + FREE_WINDOW_MS };
-  }
-
-  /** Bepul model: javob olingach, haqiqatda sarflangan tokenlarni (kirish + chiqish) qo'shadi. Servis xato bersa chaqirilmaydi — foydalanuvchidan hech narsa yechilmaydi. */
-  async freeAdd(tokens: number, modelId = "gemini-free"): Promise<void> {
-    const n = Math.max(0, Math.round(tokens));
-    if (n === 0) return;
-    const s = await this.load();
-    const now = Date.now();
-    const e = this.rollFree(s, modelId, now);
-    if (e.start === 0) e.start = now;
-    e.count += n;
-    await this.save(s);
-  }
-
-  async freeStatus(limit: number, modelId = "gemini-free"): Promise<{ used: number; limit: number; resetsAt: number }> {
-    const s = await this.load();
-    const e = this.rollFree(s, modelId, Date.now());
-    await this.save(s);
-    return { used: e.count, limit, resetsAt: e.start ? e.start + FREE_WINDOW_MS : 0 };
   }
 
   /** Hisob o'chirilganda. */

@@ -53,7 +53,7 @@ export function adminActor(req: Request): string {
 interface Entry {
   actor: string;
   action: string;
-  entity: "model" | "user" | "announcement" | "app_update" | "free_ai" | "cloud_model";
+  entity: "model" | "user" | "announcement" | "app_update" | "cloud_model";
   entityId: string;
   summary: string;
   before?: unknown;

@@ -194,15 +194,6 @@ nav::-webkit-scrollbar{display:none}
  <div class="card" id="newsCard" hidden><form id="nf" onsubmit="return newsSave(event)"></form></div>
  <div id="newsList"></div>
 </section>
-<section id="ai" hidden>
- <p class="mut">Ilovadagi <b>bepul limitli AI modellar</b> (GPT 4o mini va boshqalar) shu yerdan boshqariladi — deploy qilish shart emas (o'zgarish ~15 soniyada kuchga kiradi). Limit — <b>5 soatda nechta token</b> (kirish + chiqish; xabar soni emas), hamma bepul modellar uchun umumiy; tarifi yuqori foydalanuvchiga ko'proq beriladi. Modelga xos limit bo'sh qolsa, tarifning umumiy limiti ishlaydi.</p>
- <div class="card"><form id="aif" onsubmit="return aiSave(event)"></form></div>
- <h2>Modellar</h2>
- <div class="card scroll"><table><thead><tr><th>Faol</th><th>Nomi (ilovada)</th><th>Servisdagi kod</th><th>Limit (token) / 5 soat: tarifsiz · Boshl. · O'rta · Pro (ixtiyoriy)</th><th>Tekshirish</th><th></th></tr></thead><tbody id="aiRows"></tbody></table>
-  <div class="hint" style="margin-top:8px">Saqlash tugmasini bosmaguncha o'zgarishlar kuchga kirmaydi. «Tekshirish» servisga «Hi» yuboradi va limitga tegmaydi — avval saqlang, keyin tekshiring.</div></div>
- <h2>Yangi model qo'shish</h2>
- <div class="card"><form id="aiAdd" onsubmit="return aiAddModel(event)"></form></div>
-</section>
 <section id="upd" hidden>
  <p class="mut">Ilovaning yangi versiyasi chiqqanda foydalanuvchilarga <b>bosh sahifada</b> yopsa bo'ladigan eslatma ko'rsatadi (bosilsa Google Play ochiladi). Faqat eskiroq versiyadagilarga chiqadi. Majburiy emas — foydalanuvchi yopsa, shu versiya uchun qayta chiqmaydi. Ilova eslatmani bosh sahifa ochilganda yangilaydi (~1 daqiqa kesh).</p>
  <div class="card"><form id="uf" onsubmit="return updSave(event)"></form></div>
@@ -215,7 +206,7 @@ nav::-webkit-scrollbar{display:none}
 </section>
 </div>
 <script>
-var TABS=[['home','Umumiy'],['models','Modellar'],['subs','Obunalar'],['plans','Tariflar'],['ai','AI API\'lar'],['reqs','O\'chirish so\'rovlari'],['stats','Statistika'],['fb','Fikrlar'],['news','E\'lonlar'],['upd','Yangilanish'],['history','Tarix']];
+var TABS=[['home','Umumiy'],['models','Modellar'],['subs','Obunalar'],['plans','Tariflar'],['reqs','O\'chirish so\'rovlari'],['stats','Statistika'],['fb','Fikrlar'],['news','E\'lonlar'],['upd','Yangilanish'],['history','Tarix']];
 var FIELDS=[["id","ID (a-z0-9._-)","text"],["name","Nomi","text"],["downloadUrl","Yuklash havolasi (https)","text","wide"],["direction","Tavsif","text","wide"],
 ["category","Kategoriya","select",["CODING","CHAT","TRANSLATION","REASONING"]],["family","Oila","select",["GENERIC","QWEN","DEEPSEEK_R1","LLAMA3","GEMMA","PHI3","MISTRAL"]],
 ["role","Rol (faqat tezkor)","select",["","QUICK_ANSWERS","CODE_HELPER","TEXT_WRITER","MATH_LOGIC"]],["paramsBillion","Parametr (mlrd)","number"],
@@ -227,7 +218,7 @@ var BADGE_LBL={RECOMMENDED:"Tavsiya etilgan",NEW:"Yangi"};
 var PLAN_NAME={basic:"Boshlang'ich",standard:"O'rta",pro:"Pro"};
 var PRODUCT_NAME={mobagent_basic:"Boshlang'ich",mobagent_standard:"O'rta",mobagent_pro:"Pro"};
 var BASE=location.pathname.replace(/\/+$/,""),models=[],editing=null,tok=sessionStorage.getItem("tok")||"",cur="home";
-var ICONS={home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',models:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>',subs:'<path d="M2 7h20v10H2z"/><path d="M2 11h20"/><path d="M6 15h3"/>',plans:'<path d="M12 2l3 7 7 .6-5.3 4.7 1.6 7.2L12 17.8 5.7 21.5l1.6-7.2L2 9.6 9 9z"/>',ai:'<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',reqs:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/>',stats:'<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',fb:'<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.2A8 8 0 1 1 21 12z"/>',news:'<path d="M4 9v6h3l6 4V5L7 9z"/><path d="M17 9a4 4 0 0 1 0 6"/>',upd:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>',history:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>',moon:'<path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>'};
+var ICONS={home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',models:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>',subs:'<path d="M2 7h20v10H2z"/><path d="M2 11h20"/><path d="M6 15h3"/>',plans:'<path d="M12 2l3 7 7 .6-5.3 4.7 1.6 7.2L12 17.8 5.7 21.5l1.6-7.2L2 9.6 9 9z"/>',reqs:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/>',stats:'<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',fb:'<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.2A8 8 0 1 1 21 12z"/>',news:'<path d="M4 9v6h3l6 4V5L7 9z"/><path d="M17 9a4 4 0 0 1 0 6"/>',upd:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>',history:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>',moon:'<path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>'};
 function svgI(n){var d=document.createElement("span");d.style.display="contents";d.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[n]||"")+'</svg>';return d.firstChild}
 function icon(n){return svgI(n)}
 function curTheme(){var t=null;try{t=localStorage.getItem("theme")}catch(e){}return t||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}
@@ -250,7 +241,7 @@ async function api(m,p,b){var hd={"X-Admin":"1"};if(tok)hd.Authorization="Bearer
  var j=await r.json();if(!r.ok){var er=new Error(typeof j.error=="string"?j.error:r.status);er.status=r.status;throw er}return j}
 function tab(n){cur=n;TABS.forEach(function(t){$(t[0]).hidden=t[0]!=n});
  Array.prototype.forEach.call($("nav").children,function(b,i){b.className=TABS[i][0]==n?"on":""});say("");
- if(n=="home")loadHome();if(n=="reqs")loadReqs();if(n=="subs")loadSubs();if(n=="plans")loadPlans();if(n=="stats")loadStats();if(n=="news")loadNews();if(n=="upd")loadUpd();if(n=="ai")loadAi();if(n=="fb")loadFb();if(n=="history")loadHistory(true)}
+ if(n=="home")loadHome();if(n=="reqs")loadReqs();if(n=="subs")loadSubs();if(n=="plans")loadPlans();if(n=="stats")loadStats();if(n=="news")loadNews();if(n=="upd")loadUpd();if(n=="fb")loadFb();if(n=="history")loadHistory(true)}
 async function boot(){try{await load();$("login").hidden=true;$("app").hidden=false;$("lo").hidden=false;
  if(!$("nav").children.length)TABS.forEach(function(t){$("nav").appendChild(h("button",{onclick:function(){tab(t[0])}},[icon(t[0]),t[1]]))});tab(cur)}
  catch(e){if(e.message!="Ruxsat yo'q")say(e.message,1)}}
@@ -546,66 +537,6 @@ function updForm(c){var f=$("uf");clear(f);
 async function updSave(ev){ev.preventDefault();try{var E=$("uf").elements;
  await api("PUT","/app-update",{enabled:E.enabled.value=="true",latestCode:Number(E.latestCode.value||0),note:E.note.value});
  say("Saqlandi")}catch(e){say(e.message,1)}return false}
-/* ---------- Bepul AI API'lar ---------- */
-var ai=null,aiRef={},AI_TIERS=[["free","Tarifsiz"],["basic","Boshlang'ich"],["standard","O'rta"],["pro","Pro"]];
-async function loadAi(){try{ai=await api("GET","/free-ai");aiRender()}catch(e){say(e.message,1)}}
-function aiOpt(v,t){return h("option",{value:v},[t])}
-function aiRender(){var f=$("aif");clear(f);
- var en=h("select",{name:"enabled"},[aiOpt("true","Yoqilgan"),aiOpt("false","Hammasi o'chiq")]);en.value=String(!!ai.enabled);
- var base=h("input",{name:"base",type:"text",placeholder:ai.effectiveBase||"https://prexzyapis.com"});base.value=ai.base||"";
- f.appendChild(h("label",{},["Bepul modellar (hammasi)",en]));
- f.appendChild(h("label",{class:"wide"},["Servis manzili (bo'sh = standart: "+(ai.effectiveBase||"")+")",base]));
- if(ai.envDisabled)f.appendChild(h("div",{class:"hint wide"},["Diqqat: Worker'da FREE_AI_DISABLED=1 qo'yilgan — shu sababli bepul modellar hozir o'chiq (bu sozlamadan qat'i nazar)."]));
- AI_TIERS.forEach(function(t){var i=h("input",{name:"lim_"+t[0],type:"number",min:"1",step:"1"});i.value=ai.limits[t[0]];
-  f.appendChild(h("label",{},["Limit: "+t[1]+" (5 soatda jami token, hamma modellar uchun umumiy)",i]))});
- f.appendChild(h("div",{class:"hint wide"},["Tarifsiz foydalanuvchining standart limiti — FREE_AI_LIMIT (30000 token). Taxminan: 1 token ≈ 3 belgi, bitta oddiy xabar+javob ~1000–3000 token. Pullik tarifdagilar uchun yuqoriroq qiymat qo'ying. Faqat credits sotib olgan (tarifsiz) foydalanuvchi «Tarifsiz» limitida bo'ladi."]));
- f.appendChild(h("div",{class:"row wide"},[h("button",{class:"p",type:"submit"},["Saqlash"])]));
- var tb=$("aiRows");clear(tb);aiRef={};
- ai.models.forEach(function(m){var r=h("tr",{}),ref={lim:{}};aiRef[m.id]=ref;
-  ref.on=h("input",{type:"checkbox"});ref.on.checked=!!m.enabled;
-  ref.name=h("input",{type:"text",maxlength:"60",style:"min-width:140px"});ref.name.value=m.name;
-  var c1=h("td",{},[ref.on]);r.appendChild(c1);
-  var c2=h("td",{},[ref.name,h("div",{class:"hint mono"},[m.id+(m.builtin?"":" · qo'shilgan")+(m.showFree?" · «Bepul» belgisi bor":"")])]);r.appendChild(c2);
-  td(r,m.kind=="gemini"?"/ai/gemini":(m.upstream||"—"),"mono");
-  var lc=h("td",{style:"white-space:nowrap"},[]);
-  AI_TIERS.forEach(function(t){var i=h("input",{type:"number",min:"1",step:"1",style:"width:104px;padding:6px 8px",placeholder:String(ai.limits[t[0]]),title:t[1]});
-   if(m.limits&&m.limits[t[0]]!=null)i.value=m.limits[t[0]];ref.lim[t[0]]=i;lc.appendChild(i);lc.appendChild(document.createTextNode(" "))});
-  r.appendChild(lc);
-  var tc=h("td",{},[]);ref.res=h("span",{class:"hint"},[]);
-  tc.appendChild(h("button",{class:"s",type:"button",onclick:function(){aiTest(m)}},["Tekshirish"]));tc.appendChild(document.createTextNode(" "));tc.appendChild(ref.res);r.appendChild(tc);
-  var dc=h("td",{},[]);if(!m.builtin)dc.appendChild(h("button",{class:"s d",type:"button",onclick:function(){aiDel(m.id)}},["O'chirish"]));r.appendChild(dc);
-  tb.appendChild(r)});
- var a=$("aiAdd");clear(a);
- a.appendChild(h("label",{},["Nomi (ilovada)",h("input",{name:"name",type:"text",maxlength:"60",placeholder:"masalan: Llama 3.3 70B"})]));
- a.appendChild(h("label",{},["Servisdagi model kodi (/ai/aiwriter-chat)",h("input",{name:"code",type:"text",maxlength:"64",placeholder:"masalan: llama-3.3-70b"})]));
- a.appendChild(h("label",{},["Daraja",h("select",{name:"tier"},[aiOpt("medium","O'rtacha"),aiOpt("strong","Kuchli")])]));
- a.appendChild(h("div",{class:"row"},[h("button",{type:"submit"},["+ Qo'shish"])]))}
-function aiSync(){var f=$("aif").elements;ai.enabled=f.enabled.value=="true";ai.base=f.base.value.trim();
- AI_TIERS.forEach(function(t){var v=Number(f["lim_"+t[0]].value);if(v>0)ai.limits[t[0]]=v});
- ai.models.forEach(function(m){var r=aiRef[m.id];if(!r)return;m.enabled=r.on.checked;m.name=r.name.value.trim()||m.defaultName||m.name;
-  var l={};AI_TIERS.forEach(function(t){var v=r.lim[t[0]].value;if(v!=="")l[t[0]]=Number(v)});m.limits=l})}
-function aiAddModel(ev){ev.preventDefault();var E=$("aiAdd").elements,name=E.name.value.trim(),code=E.code.value.trim();
- if(!name||!code){say("Nom va model kodini kiriting",1);return false}
- aiSync();var slug=code.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,50)||"model",id="aw-"+slug,n=2;
- function has(x){return ai.models.some(function(m){return m.id==x})}
- while(has(id)){id="aw-"+slug+"-"+n;n++}
- ai.models.push({id:id,name:name,defaultName:name,kind:"aiwriter",upstream:code,tier:E.tier.value,builtin:false,enabled:true,showFree:false,limits:{}});
- aiRender();say("Qo'shildi — «Saqlash» ni bosing");return false}
-function aiDel(id){if(!confirm("Bu qo'shilgan model ro'yxatdan olib tashlansinmi? (Saqlagandan keyin kuchga kiradi)"))return;
- aiSync();ai.models=ai.models.filter(function(m){return m.id!=id});aiRender()}
-async function aiTest(m){var r=aiRef[m.id];r.res.className="hint";r.res.textContent="…";
- try{var x=await api("POST","/free-ai/test",{id:m.id});
-  var t=(x.ok?"✓ ":"✗ ")+x.ms+" ms"+(x.status?" · HTTP "+x.status:" · ulanmadi");
-  if(x.ok&&x.expected)t+=" · servis modeli: "+(x.reportedModel||"ko'rsatilmagan");
-  r.res.className="hint "+(x.ok?"ok":"err");r.res.textContent=t;r.res.title=x.sample||""}
- catch(e){r.res.className="hint err";r.res.textContent=e.status==404?"Avval saqlang":e.message}}
-async function aiSave(ev){ev.preventDefault();try{aiSync();
- var off=[],names={},ml={},custom=[];
- ai.models.forEach(function(m){if(!m.enabled)off.push(m.id);
-  if(m.builtin){if(m.name&&m.name!=m.defaultName)names[m.id]=m.name}else custom.push({id:m.id,name:m.name,upstream:m.upstream,tier:m.tier});
-  if(m.limits&&Object.keys(m.limits).length)ml[m.id]=m.limits});
- var r=await api("PUT","/free-ai",{enabled:ai.enabled,base:ai.base,limits:ai.limits,off:off,names:names,modelLimits:ml,custom:custom});
- ai=r;aiRender();say("Saqlandi")}catch(e){say(e.message,1)}return false}
 /* ---------- Tarix ---------- */
 var LBL={name:"Nomi",downloadUrl:"Havola",direction:"Tavsif",category:"Kategoriya",baseSizeMb:"Hajm (MB)",baseRamMb:"RAM (MB)",minPhoneClass:"Mos telefon",family:"Oila",paramsBillion:"Parametr (mlrd)",maxContext:"Kontekst",role:"Rol",sha256:"sha256",sizeBytes:"Hajm (bayt)",enabled:"Faol",sortOrder:"Tartib",systemPrompt:"System prompt",agentPrompt:"Agent ko'rsatmasi",note:"Izoh",badge:"Belgi"};
 var ACT={create:["yaratildi","ok"],update:["o'zgartirildi",""],"delete":["o'chirildi","bad"],revert:["bekor qilindi","warn"],grant:["tarif berildi","ok"],revoke:["tarif qaytarildi","warn"],"reset-usage":["limit tiklandi","warn"],push:["bildirishnoma","ok"]};
