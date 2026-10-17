@@ -38,12 +38,6 @@ import com.mobagent.app.ui.theme.TextMuted
 import kotlinx.coroutines.delay
 
 /**
- * Google Play (AI-Generated Content siyosati): foydalanuvchi AI javobini ilova ichidan
- * shikoyat qila olishi shart. MUHIM: quyidagi manzilni o'zingizning haqiqiy email'ingizga o'zgartiring.
- */
-private const val REPORT_EMAIL = "mob.agent.app@gmail.com"
-
-/**
  * AI javobi tagidagi kichik tugmalar qatori: nusxalash, ulashish va
  * (faqat oxirgi javobda) qayta yaratish.
  */
@@ -56,6 +50,8 @@ fun MessageActions(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var copied by remember(text) { mutableStateOf(false) }
+    // Google Play (AI-Generated Content): ilova ichidan shikoyat qilish (ReportDialog).
+    var reporting by remember(text) { mutableStateOf(false) }
 
     // "Nusxalandi" belgisi (galochka) 1.6 soniyadan keyin oddiy ikonkaga qaytadi.
     LaunchedEffect(copied) {
@@ -88,15 +84,10 @@ fun MessageActions(
         if (onRegenerate != null) {
             ActionIcon(Icons.Outlined.Refresh, tr("Qayta yaratish"), onClick = onRegenerate)
         }
-        ActionIcon(Icons.Outlined.Flag, tr("Shikoyat qilish")) {
-            val mail = Intent(Intent.ACTION_SENDTO).apply {
-                data = android.net.Uri.parse("mailto:")
-                putExtra(Intent.EXTRA_EMAIL, arrayOf(REPORT_EMAIL))
-                putExtra(Intent.EXTRA_SUBJECT, tr("MobAgent: AI javobi haqida shikoyat"))
-                putExtra(Intent.EXTRA_TEXT, tr("Shikoyat sababi (zararli / noto'g'ri / nomaqbul):") + "\n\n--- " + tr("AI javobi") + " ---\n" + text.take(4000))
-            }
-            runCatching { context.startActivity(Intent.createChooser(mail, tr("Shikoyat qilish"))) }
-        }
+        ActionIcon(Icons.Outlined.Flag, tr("Shikoyat qilish")) { reporting = true }
+    }
+    if (reporting) {
+        ReportDialog(aiReply = text, onDismiss = { reporting = false })
     }
 }
 

@@ -12,6 +12,7 @@ import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
+import com.google.firebase.auth.FirebaseAuth
 import com.mobagent.app.i18n.tr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -122,17 +123,34 @@ object BillingManager : PurchasesUpdatedListener {
         }
     }
 
+    /**
+     * Google Play firibgarlikni aniqlashi uchun: xaridni hisobga bog'laydigan, lekin uid'ni ochiq
+     * bermaydigan (SHA-256) identifikator. Hisobga kirilmagan bo'lsa null.
+     */
+    private fun accountHash(): String? {
+        val uid = runCatching { FirebaseAuth.getInstance().currentUser?.uid }.getOrNull() ?: return null
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(("mobagent:$uid").toByteArray())
+            .joinToString("") { "%02x".format(it) }
+    }
+
+    private fun flowParams(p: BillingFlowParams.ProductDetailsParams): BillingFlowParams {
+        val b = BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(p))
+        accountHash()?.let { b.setObfuscatedAccountId(it) }
+        return b.build()
+    }
+
     fun launchCredits(activity: Activity, offer: CreditOffer): Boolean {
         val pd = details[offer.productId] ?: return false
         val p = BillingFlowParams.ProductDetailsParams.newBuilder().setProductDetails(pd).build()
-        val flow = BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(p)).build()
+        val flow = flowParams(p)
         return client?.launchBillingFlow(activity, flow)?.responseCode == BillingClient.BillingResponseCode.OK
     }
 
     fun launch(activity: Activity, offer: Offer): Boolean {
         val pd = details[offer.productId] ?: return false
         val p = BillingFlowParams.ProductDetailsParams.newBuilder().setProductDetails(pd).setOfferToken(offer.offerToken).build()
-        val flow = BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(p)).build()
+        val flow = flowParams(p)
         return client?.launchBillingFlow(activity, flow)?.responseCode == BillingClient.BillingResponseCode.OK
     }
 

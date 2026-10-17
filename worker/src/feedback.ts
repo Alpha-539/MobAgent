@@ -5,12 +5,14 @@ import { verifyFirebase } from "./auth";
 /**
  * Foydalanuvchi fikrlari. Ilova yuboradi (POST /feedback, Firebase token kerak), adminda ko'rinadi.
  * Faqat foydalanuvchi o'zi yozgan matn, turi, ixtiyoriy aloqa, ilova versiyasi va tili saqlanadi.
- * Chat matni hech qachon yuborilmaydi. Hisob o'chirilganda uning fikrlari ham o'chadi (wipeFeedback).
+ * Chat matni yuborilmaydi; faqat "report" turida foydalanuvchi shikoyat qilgan BITTA AI javobi qo'shiladi. Hisob o'chirilganda uning fikrlari ham o'chadi (wipeFeedback).
  */
 
-export const FEEDBACK_KINDS = ["idea", "bug", "other"] as const;
+export const FEEDBACK_KINDS = ["idea", "bug", "other", "report"] as const;
 const LANGS = ["uz", "ru", "en", "ar"];
 const MAX_MSG = 1000;
+/** "report" (AI javobi haqida shikoyat) shikoyat qilingan javob matnini ham o'z ichiga oladi. */
+const MAX_REPORT = 5000;
 const MIN_MSG = 5;
 const PER_HOUR = 5;
 const PER_DAY = 15;
@@ -45,7 +47,8 @@ export async function submitFeedback(env: Env, req: Request): Promise<Response> 
   if (!(FEEDBACK_KINDS as readonly string[]).includes(kind)) return json({ error: "tur noto'g'ri" }, 400);
   const message = typeof b.message === "string" ? b.message.trim() : "";
   if (message.length < MIN_MSG) return json({ error: "fikr juda qisqa" }, 400);
-  if (message.length > MAX_MSG) return json({ error: `fikr ${MAX_MSG} belgidan oshmasin` }, 400);
+  const maxLen = kind === "report" ? MAX_REPORT : MAX_MSG;
+  if (message.length > maxLen) return json({ error: `fikr ${maxLen} belgidan oshmasin` }, 400);
   const contact = typeof b.contact === "string" ? b.contact.trim().slice(0, 120) : "";
   const appVersion = typeof b.appVersion === "string" ? b.appVersion.trim().slice(0, 30) : "";
   const lang = typeof b.lang === "string" && LANGS.includes(b.lang) ? b.lang : "";

@@ -181,8 +181,8 @@ nav::-webkit-scrollbar{display:none}
  <div class="card scroll"><table><thead><tr><th>Kun</th><th>DAU</th><th>Ochilish</th><th>Yuklash boshlandi</th><th>Yuklandi</th><th>Xato</th><th>Offline chat</th><th>Online chat</th></tr></thead><tbody id="days"></tbody></table></div>
 </section>
 <section id="fb" hidden>
- <p class="mut">Foydalanuvchilar ilovadagi <b>Sozlamalar → Fikr bildirish</b> orqali yuborgan fikrlar. Faqat ularning o'zi yozgan matn, turi, ixtiyoriy aloqa, ilova versiyasi va tili saqlanadi (chat matni emas). Foydalanuvchi hisobini o'chirsa, fikrlari ham o'chadi. Bir foydalanuvchi soatiga 5 ta, kuniga 15 tagacha yubora oladi.</p>
- <div class="tb"><select id="fbKind" onchange="loadFb()"><option value="">Hamma tur</option><option value="idea">Taklif</option><option value="bug">Xato</option><option value="other">Boshqa</option></select>
+ <p class="mut">Foydalanuvchilar ilovadagi <b>Sozlamalar → Fikr bildirish</b> orqali yuborgan fikrlar. Faqat ularning o'zi yozgan matn, turi, ixtiyoriy aloqa, ilova versiyasi va tili saqlanadi (chat matni emas; faqat «AI shikoyati» turida foydalanuvchi shikoyat qilgan bitta AI javobi ham bor). Foydalanuvchi hisobini o'chirsa, fikrlari ham o'chadi. Bir foydalanuvchi soatiga 5 ta, kuniga 15 tagacha yubora oladi.</p>
+ <div class="tb"><select id="fbKind" onchange="loadFb()"><option value="">Hamma tur</option><option value="idea">Taklif</option><option value="bug">Xato</option><option value="other">Boshqa</option><option value="report">AI shikoyati</option></select>
   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="fbUnread" onchange="loadFb()"> faqat o'qilmagan</label>
   <button onclick="fbReadAll()">Hammasini o'qilgan qilish</button></div>
  <p class="mut" id="fbCount"></p>
@@ -459,7 +459,7 @@ async function loadStats(){try{var s=await api("GET","/stats");dlChart(s.days);$
  var d=$("days");clear(d);s.days.forEach(function(x){var tr=h("tr");
   [x.day,x.dau,x.app_open,x.download_start,x.download_ok,x.download_fail,x.chat_offline,x.chat_online].forEach(function(v){td(tr,String(v))});d.appendChild(tr)})}catch(e){say(e.message,1)}}
 /* ---------- Fikrlar ---------- */
-var FBK={idea:["taklif",""],bug:["xato","bad"],other:["boshqa",""]};
+var FBK={idea:["taklif",""],bug:["xato","bad"],other:["boshqa",""],report:["AI shikoyati","bad"]};
 async function loadFb(){try{var q="?unread="+($("fbUnread").checked?"1":"0")+"&kind="+encodeURIComponent($("fbKind").value),r=await api("GET","/feedback"+q),b=$("fbList");clear(b);
  $("fbCount").textContent="Ko'rsatilmoqda: "+r.feedback.length+" · O'qilmagan: "+r.unread+" · Jami: "+r.total;
  if(!r.feedback.length)b.appendChild(h("p",{class:"mut"},["Fikr yo'q"]));

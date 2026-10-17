@@ -139,7 +139,7 @@ export function privacyPage(env: Env, langParam: string | null): Response {
 <li><b>Online chat history:</b> chats in online mode are stored in Firebase Firestore linked to your account so they sync across your devices. Images are not uploaded.</li>
 <li><b>API keys:</b> AI-provider keys you enter are stored on the device; if account sync is on, an encrypted copy is kept in Firestore. The encryption key is stored within the same account space, so this protects against accidental exposure, not against the database administrator.</li>
 <li><b>Stars:</b> which models you starred, linked to your user ID.</li>
-<li><b>Feedback:</b> the feedback text you send from the app, its type, optional contact detail, app version and language — linked to your user ID.</li>
+<li><b>Feedback and AI-reply reports:</b> the feedback text you send from the app, its type, optional contact detail, app version and language — linked to your user ID. If you report an AI reply (flag icon), the reason you choose, your optional comment and that single AI reply are sent so we can review it; the rest of your chat is not sent.</li>
 <li><b>Aggregate statistics:</b> counts of app opens, model downloads and errors, not linked to you. Daily active users are counted using a one-way hash that changes every day; your ID itself is not stored and cannot be linked across days.</li>
 <li><b>Firebase Analytics (Google):</b> may collect general usage data (device model, OS version, in-app events, app-instance ID).</li>
 <li><b>Technical logs:</b> our server provider (Cloudflare) may briefly record technical request data such as IP addresses. We do not store IP addresses in our own database.</li>

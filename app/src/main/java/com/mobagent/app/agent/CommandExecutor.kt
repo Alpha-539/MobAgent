@@ -49,18 +49,6 @@ fun normalizeStoragePaths(command: String): String =
  * ichida ishlaydi — "cd", "export FOO=bar" kabi holat o'zgarishlari
  * KEYINGI buyruqqa ham o'tadi (xuddi haqiqiy terminal/SSH sessiyasidagidek).
  * Batafsil: PersistentShellSession.kt.
- *
- * TERMUX YO'NALTIRISH: toybox faqat asosiy UNIX vositalarini beradi —
- * to'liq interpretator (python/node/ruby) yoki kompilyator/paket menejeri
- * (git/clang/pkg) EMAS. Bunday buyruqlar kelsa va qurilmada Termux
- * o'rnatilgan bo'lsa, buyruq avtomatik Termux'ga (TermuxBridge.kt)
- * yo'naltiriladi — sababi va cheklovlari o'sha faylda batafsil yozilgan.
- *
- * QURILMA IMKONIYATLARI (termux-api): batareya holati, kamera surati,
- * clipboard, bildirishnoma kabi buyruqlar ham xuddi shu yo'l bilan
- * Termux'ga yuboriladi — ular alohida "Termux:API" ilovasi orqali
- * ishlaydi (Termux ichida "pkg install termux-api" + Termux:API'ni
- * alohida o'rnatish kerak).
  */
 class CommandExecutor(
     private val workingDir: File,
@@ -69,28 +57,6 @@ class CommandExecutor(
     // Ilova (yoki hech bo'lmasa shu ViewModel/ekran) umri davomida saqlanadigan
     // bitta doimiy sessiya. restartSession() chaqirilguncha yashaydi.
     private val session by lazy { PersistentShellSession(workingDir, context) }
-
-    // toybox'da mavjud bo'lmagan, to'liq interpretator/kompilyator/paket
-    // menejeri talab qiladigan buyruqlar — bular Termux'ga yo'naltiriladi.
-    private val termuxOnlyCommands = setOf(
-        "pkg", "apt", "apt-get", "dpkg",
-        "python", "python3", "pip", "pip3",
-        "node", "npm", "npx", "yarn",
-        "ruby", "gem", "bundle",
-        "git",
-        "clang", "clang++", "gcc", "g++", "cc", "c++", "make", "cmake",
-        "java", "javac", "go", "rustc", "cargo", "perl", "php",
-        // termux-api (alohida "Termux:API" ilovasi + Termux ichida
-        // "pkg install termux-api" talab qiladi) — batareya, kamera,
-        // clipboard, bildirishnoma kabi qurilma imkoniyatlariga kirish.
-        // Bular ham toybox'da yo'q, Termux:API ilovasi orqali ishlaydi,
-        // shuning uchun xuddi python/git kabi shu yerga yo'naltiriladi.
-        "termux-battery-status",
-        "termux-camera-info", "termux-camera-photo",
-        "termux-clipboard-get", "termux-clipboard-set",
-        "termux-notification", "termux-notification-remove",
-        "termux-vibrate", "termux-toast"
-    )
 
     // Oxirgi buyruq Linux rejimida bajarilganmi: rejim o'zgarsa (foydalanuvchi sozlamada
     // yoqdi/o'chirdi) eski sessiya yopilib, yangisi kerakli muhitda ochiladi.
@@ -102,17 +68,7 @@ class CommandExecutor(
         if (lastLinuxMode != null && lastLinuxMode != linux) session.reset()
         lastLinuxMode = linux
 
-        val firstWord = command.trim().substringBefore(' ')
-        // Linux rejimida apt/python/git/gcc Ubuntu ichida o'zi bor — Termux'ga yo'naltirilmaydi.
-        val needsTermux = false && !linux && context != null &&
-            firstWord in termuxOnlyCommands &&
-            ToyboxProvisioner.pathPrefix(context)?.let { File(it, firstWord).exists() } != true
-
-        return if (needsTermux) {
-            TermuxBridge.runShellCommand(context!!, command, workdir = "/data/data/com.termux/files/home")
-        } else {
-            session.run(command)
-        }
+        return session.run(command)
     }
 
     /** Fayl asboblari yo'li: Linux faol bo'lsa Linux fayl tizimiga (yoki /sdcard'ga) xaritalanadi. */
