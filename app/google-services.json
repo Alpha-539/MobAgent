@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "905223723470-41pabuos9511sgcuepc3j6h6fjnhe0br.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mobagent.app",
+            "certificate_hash": "fa3b9422bd6562eec276694b94b4147b370bb4fc"
+          }
+        },
+        {
+          "client_id": "905223723470-dnelt4p0tordc828gokp0u018fhlh5nj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mobagent.app",
+            "certificate_hash": "bfefbf153784bbf6e7fb42134e7a1fc1b17a796c"
+          }
+        },
+        {
           "client_id": "905223723470-fje3g371q0kj694j7r13ih35n55on902.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
