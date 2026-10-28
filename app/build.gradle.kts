@@ -37,12 +37,9 @@ android {
                     // Bu ilova Debug APK sifatida qurilsa ham, native tomon
                     // doim Release (optimallashtirilgan) bo'lishi kerak.
                     "-DCMAKE_BUILD_TYPE=Release",
-                    // TEZLIK: bu bayroqlarsiz llama.cpp arm64'ni eng oddiy
-                    // (armv8-a) rejimda quradi — dotprod/fp16 buyruqlari
-                    // ishlatilmaydi va 3B model prompt'ni 3-5 baravar
-                    // sekin hisoblaydi. armv8.2-a+dotprod+fp16 2018-yildan
-                    // keyingi deyarli barcha Android telefonlarda bor.
-                    "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16",
+                    // TEZLIK: CPU variantlari (dotprod/i8mm/...) CMakeLists.txt'da
+                    // GGML_CPU_ALL_VARIANTS bilan quriladi va ish vaqtida tanlanadi;
+                    // statik GGML_CPU_ARM_ARCH bu yerdan olib tashlandi.
                     "-DGGML_NATIVE=OFF",
                     "-DGGML_LLAMAFILE=ON"
                     // GGML_VULKAN ni olib tashlandi - CMakeLists.txt'da o'rnatiladi

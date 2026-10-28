@@ -8,7 +8,10 @@
 #include <mutex>
 #include <chrono>
 #include <android/log.h>
+#include <dlfcn.h>
+#include <libgen.h>
 #include "llama.h"
+#include "ggml-backend.h"
 
 #define TAG "LlamaEngine"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -79,6 +82,20 @@ Java_com_mobagent_app_engine_LlamaEngine_nativeInit(
     // o'chirilmaydi — bu llama.cpp'ning o'zi tavsiya qilgan usul.
     static std::once_flag backendInitFlag;
     std::call_once(backendInitFlag, []() {
+        // CPU backend variantlari (libggml-cpu-*.so) alohida modul sifatida
+        // quriladi — ularni shu kutubxona (libllama-android.so) joylashgan
+        // papkadan (nativeLibraryDir) yuklaymiz; ggml telefon protsessoriga
+        // eng mos variantni o'zi tanlaydi.
+        Dl_info info;
+        if (dladdr((void *) &llama_backend_init, &info) && info.dli_fname) {
+            std::string path(info.dli_fname);
+            std::string dir = path.substr(0, path.find_last_of('/'));
+            ggml_backend_load_all_from_path(dir.c_str());
+            LOGI("ggml backend'lar yuklandi: %s (soni=%zu)", dir.c_str(), ggml_backend_reg_count());
+        } else {
+            ggml_backend_load_all();
+            LOGE("dladdr ishlamadi — standart yo'l bilan yuklandi");
+        }
         llama_backend_init();
         LOGI("llama backend ishga tushirildi (faqat 1 marta, jarayon davomida)");
     });
@@ -128,7 +145,26 @@ Java_com_mobagent_app_engine_LlamaEngine_nativeInit(
     cparams.abort_callback = llamaAbortCallback;
     cparams.abort_callback_data = &engineCtx->cancelRequested;
 
+    // TEZLIK/XOTIRA: Flash Attention + 8-bit KV-kesh. KV-kesh f16 dan q8_0 ga
+    // o'tsa, kontekst xotirasi ~2 baravar kamayadi (3B+ modellarda telefonning
+    // qotib qolishini kamaytiradi) va uzun suhbatlarda attention tezroq bo'ladi.
+    // Qisqa kontekstda (<4096) foyda kam, shuning uchun faqat katta kontekstda yoqamiz.
+    // V-kesh kvantizatsiyasi Flash Attention'ni talab qiladi: AUTO uni model
+    // qo'llasa yoqadi. Agar kombinatsiya ishlamasa — pastda f16 ga qaytamiz.
+    cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO;
+    const bool quantizeKv = effectiveCtx >= 4096;
+    if (quantizeKv) {
+        cparams.type_k = GGML_TYPE_Q8_0;
+        cparams.type_v = GGML_TYPE_Q8_0;
+    }
+
     llama_context *ctx = llama_init_from_model(model, cparams);
+    if (!ctx && quantizeKv) {
+        LOGE("q8_0 KV-kesh bilan context yaratilmadi — f16 ga qaytilmoqda");
+        cparams.type_k = GGML_TYPE_F16;
+        cparams.type_v = GGML_TYPE_F16;
+        ctx = llama_init_from_model(model, cparams);
+    }
     if (!ctx) {
         LOGE("Context yaratilmadi (n_ctx=%d) — ehtimol xotira yetarli emas", effectiveCtx);
         llama_model_free(model);
@@ -137,7 +173,8 @@ Java_com_mobagent_app_engine_LlamaEngine_nativeInit(
     }
     engineCtx->ctx = ctx;
 
-    LOGI("Model yuklandi: n_ctx=%d, n_threads=%d", effectiveCtx, nThreads);
+    LOGI("Model yuklandi: n_ctx=%d, n_threads=%d, kv=%s", effectiveCtx, nThreads,
+         (cparams.type_k == GGML_TYPE_Q8_0) ? "q8_0" : "f16");
     return reinterpret_cast<jlong>(engineCtx);
 }
 

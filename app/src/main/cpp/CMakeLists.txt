@@ -21,6 +21,19 @@ set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 # bu xavfsiz va qulay.
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 
+# TEZLIK: CPU backend'ning BARCHA variantlari alohida kutubxona (libggml-cpu-*.so)
+# sifatida quriladi va ilova ishga tushganda telefon protsessoriga eng mos
+# varianti (dotprod / i8mm / SVE ...) AVTOMATIK tanlanadi (llama-android.cpp'da
+# ggml_backend_load_all_from_path). Statik -march bayrog'i esa yangi buyruqlarni
+# eski telefonlarda SIGILL (qulash) bilan yakunlantirardi — bu yo'l xavfsiz.
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
+set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
+set(GGML_CPU_ALL_VARIANTS ON CACHE BOOL "" FORCE)
+set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+# 16 KB sahifa hizalanishi: variant modullari (MODULE) uchun ham.
+set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
+
 add_subdirectory(llama.cpp)
 
 add_library(llama-android SHARED
