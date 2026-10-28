@@ -1,6 +1,7 @@
 import { SignJWT, importPKCS8 } from "jose";
 import { PRODUCT_TO_PLAN, type PlanId } from "./plans";
 import type { Env } from "./types";
+import { sanitizePrivateKey } from "./util";
 
 const SCOPE = "https://www.googleapis.com/auth/androidpublisher";
 const API = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications";
@@ -21,7 +22,7 @@ async function accessToken(env: Env): Promise<string> {
   }
   
   const sa = JSON.parse(env.PLAY_SERVICE_ACCOUNT) as { client_email: string; private_key: string };
-  const key = await importPKCS8(sa.private_key, "RS256");
+  const key = await importPKCS8(sanitizePrivateKey(sa.private_key), "RS256");
   const assertion = await new SignJWT({ scope: SCOPE })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
     .setIssuer(sa.client_email)

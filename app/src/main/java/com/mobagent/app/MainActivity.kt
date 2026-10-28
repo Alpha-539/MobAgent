@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
             notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
         com.mobagent.app.model.RemoteCatalog.loadCached(applicationContext)
+        com.mobagent.app.model.ModelCatalog.custom = com.mobagent.app.model.CustomModelStore.load(applicationContext)
         com.mobagent.app.billing.BillingManager.init(applicationContext)
         com.mobagent.app.model.ApiClient.event("app_open")
         com.mobagent.app.history.ImageStore.init(applicationContext)
@@ -93,6 +94,7 @@ private sealed class Screen {
     data class CloudPlans(val from: Screen? = null) : Screen()
     object ApiKeys : Screen()
     object OfflineModelList : Screen()
+    object ExploreHuggingFace : Screen()
     object Settings : Screen()
     object Profile : Screen()
     object SettingsModels : Screen()
@@ -154,6 +156,7 @@ private fun SignedInRoot() {
             is Screen.ApiKeys -> Screen.Online
             is Screen.CloudPlans -> current.from ?: Screen.Online
             is Screen.OfflineModelList -> Screen.Home
+            is Screen.ExploreHuggingFace -> Screen.OfflineModelList
             is Screen.Settings -> Screen.Home
             is Screen.Profile -> Screen.Settings
             is Screen.SettingsModels -> Screen.Settings
@@ -292,7 +295,14 @@ private fun SignedInRoot() {
                 },
                 onMenuClick = { scope.launch { drawerState.open() } },
                 startupError = downloadError,
-                onStartupErrorShown = { downloadError = null }
+                onStartupErrorShown = { downloadError = null },
+                onAddClick = { screen = Screen.ExploreHuggingFace }
+            )
+
+            is Screen.ExploreHuggingFace -> ExploreHuggingFaceScreen(
+                onBack = { screen = Screen.OfflineModelList },
+                onModelDownload = { model -> screen = Screen.Downloading(model, Screen.OfflineModelList) },
+                onModelImported = { _ -> screen = Screen.OfflineModelList }
             )
 
             is Screen.History -> ChatHistoryScreen(

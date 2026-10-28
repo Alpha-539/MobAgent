@@ -4,6 +4,7 @@ import com.mobagent.app.i18n.mirrorInRtl
 import com.mobagent.app.i18n.tr
 import android.app.ActivityManager
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,10 +18,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -46,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mobagent.app.R
+import com.mobagent.app.model.CustomModelStore
 import com.mobagent.app.model.ModelBadge
 import com.mobagent.app.model.ModelCatalog
 import com.mobagent.app.model.ModelCategory
@@ -59,6 +63,7 @@ import com.mobagent.app.model.DOWNLOAD_SPACE_MARGIN_BYTES
 import com.mobagent.app.model.freeSpaceBytes
 import com.mobagent.app.model.modelsDir
 import com.mobagent.app.model.partialDownloadBytes
+import com.mobagent.app.model.deleteModelPartials
 import com.mobagent.app.model.deleteDownloadedModel
 import com.mobagent.app.model.downloadedModelFile
 import com.mobagent.app.ui.theme.*
@@ -79,11 +84,18 @@ fun ModelStoreScreen(
     onMenuClick: (() -> Unit)? = null,
     // DownloadScreen'da yuklash xato bilan tugasa, shu yerda ko'rsatiladi.
     startupError: String? = null,
-    onStartupErrorShown: () -> Unit = {}
+    onStartupErrorShown: () -> Unit = {},
+    onAddClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var models by remember { mutableStateOf(ModelCatalog.models) }
     val scope = rememberCoroutineScope()
+    var showAddCustomDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        ModelCatalog.custom = CustomModelStore.load(context)
+        models = ModelCatalog.models
+    }
     // Yulduzchalar: men qo'yganlar va (o'zim o'zgartirgandan keyingi) yangi umumiy sonlar
     var myStars by remember { mutableStateOf<Set<String>>(emptySet()) }
     var starCounts by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
@@ -139,6 +151,9 @@ fun ModelStoreScreen(
     var filter by remember { mutableStateOf<ModelCategory?>(null) }
     // true = faqat yuklab olingan (installed) modellar. Kategoriya filtri bilan birga ishlaydi.
     var onlyInstalled by remember { mutableStateOf(false) }
+    // true = faqat hozir yuklanayotgan yoki pauzada/yarim to'xtagan modellar
+    var onlyDownloading by remember { mutableStateOf(false) }
+    var toDeletePartial by remember { mutableStateOf<ModelItem?>(null) }
     // Telefonning umumiy RAM'i (GB) — kartadagi "og'ir" belgisi uchun.
     val totalGb = remember { totalRamGb(context) }
 
@@ -162,10 +177,29 @@ fun ModelStoreScreen(
             }
         }
         Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            LogoMark(fontSize = 18.sp)
-            Spacer(Modifier.width(8.dp))
-            Text(tr("Modelni tanlang"), color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LogoMark(fontSize = 18.sp)
+                Spacer(Modifier.width(8.dp))
+                Text(tr("Modelni tanlang"), color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(Sizing.radiusPill))
+                    .background(AccentPurpleBg)
+                    .border(1.dp, AccentPurple, RoundedCornerShape(Sizing.radiusPill))
+                    .clickable { onAddClick?.invoke() ?: run { showAddCustomDialog = true } }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null, tint = AccentPurple, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(tr("Qo'shish"), color = AccentPurpleText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
         Spacer(Modifier.height(4.dp))
         Text(tr("Har biri turli vazifaga mos, kerakli xotira va RAM ko'rsatilgan"), color = TextSecondary, fontSize = 12.sp)
@@ -184,34 +218,60 @@ fun ModelStoreScreen(
         // BARQAROR (stable) tartiblash, shuning uchun har guruh ichida
         // katalogdagi asl tartib saqlanadi (yuklab olinmagan modellar
         // o'zaro, yuklab olinganlar o'zaro — asl ketma-ketlikda).
-        val sortedModels = remember(models, downloadedFiles) {
-            models.sortedByDescending { downloadedFiles[it.id] != null }
+        val sortedModels = remember(models, downloadedFiles, activeDownload, downloadedVersion) {
+            models.sortedWith(
+                compareByDescending<ModelItem> { downloadedFiles[it.id] != null }
+                    .thenByDescending { activeDownload?.modelId == it.id || partialDownloadBytes(context, it.id) > 0 }
+            )
         }
 
-        // Filtr tugmalari: Hammasi + kategoriyalar
+        val downloadingCount = remember(models, downloadedFiles, activeDownload, downloadedVersion) {
+            models.count { model ->
+                downloadedFiles[model.id] == null &&
+                    (activeDownload?.modelId == model.id || partialDownloadBytes(context, model.id) > 0)
+            }
+        }
+
+        // Filtr tugmalari: Hammasi + Yuklab olingan + Yuklanayotgan + kategoriyalar
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
                 text = tr("Hammasi"),
-                selected = filter == null && !onlyInstalled,
-                onClick = { filter = null; onlyInstalled = false }
+                selected = filter == null && !onlyInstalled && !onlyDownloading,
+                onClick = { filter = null; onlyInstalled = false; onlyDownloading = false }
             )
             FilterChip(
                 text = tr("Yuklab olingan"),
                 selected = onlyInstalled,
-                onClick = { onlyInstalled = !onlyInstalled }
+                onClick = { onlyInstalled = !onlyInstalled; onlyDownloading = false }
+            )
+            val downloadingBadge = if (downloadingCount > 0) " ($downloadingCount)" else ""
+            FilterChip(
+                text = tr("Yuklanayotgan") + downloadingBadge,
+                selected = onlyDownloading,
+                onClick = { onlyDownloading = !onlyDownloading; onlyInstalled = false }
             )
             ModelCategory.values().forEach { cat ->
-                FilterChip(text = cat.label, selected = filter == cat, onClick = { filter = cat })
+                FilterChip(
+                    text = cat.label,
+                    selected = filter == cat && !onlyDownloading,
+                    onClick = { filter = cat; onlyDownloading = false }
+                )
             }
         }
         Spacer(Modifier.height(12.dp))
 
-        val visible = sortedModels.filter {
-            (filter == null || it.category == filter) &&
-                (!onlyInstalled || downloadedFiles[it.id] != null)
+        val visible = sortedModels.filter { model ->
+            if (onlyDownloading) {
+                downloadedFiles[model.id] == null &&
+                    (activeDownload?.modelId == model.id || partialDownloadBytes(context, model.id) > 0)
+            } else if (onlyInstalled) {
+                downloadedFiles[model.id] != null && (filter == null || model.category == filter)
+            } else {
+                (filter == null || model.category == filter)
+            }
         }
         // Bo'limlar tartibi: Tezkor -> Agent -> Kuchli. Bo'sh bo'lim ko'rsatilmaydi.
         val sections = ModelTier.values().map { tier -> tier to visible.filter { it.tier == tier } }
@@ -219,10 +279,14 @@ fun ModelStoreScreen(
 
         if (sections.isEmpty()) {
             Text(
-                if (onlyInstalled && filter == null) tr("Hali yuklab olingan model yo'q")
-                else tr("Bu filtrga mos model yo'q"),
+                when {
+                    onlyDownloading -> tr("Hozirda yuklanayotgan yoki to'xtatilgan modellar yo'q.")
+                    onlyInstalled && filter == null -> tr("Hali yuklab olingan model yo'q")
+                    else -> tr("Bu filtrga mos model yo'q")
+                },
                 color = TextMuted,
-                fontSize = 12.sp
+                fontSize = 12.sp,
+                modifier = Modifier.padding(vertical = 12.dp)
             )
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -255,6 +319,7 @@ fun ModelStoreScreen(
                             }
                         },
                         downloaded = file != null,
+                        partialBytes = partialDownloadBytes(context, model.id),
                         tooHeavy = !fitsTotalRam(totalGb, model),
                         recommendedGb = if (model.paramsBillion >= 3.0) recommendedRamGb(model) else null,
                         activeDownload = activeDownload?.takeIf { it.modelId == model.id },
@@ -285,6 +350,7 @@ fun ModelStoreScreen(
                                 else tr("Xotira yetarli emas, kichikroq modelni tanlang")
                             }
                         },
+                        onCancelPartial = { toDeletePartial = model },
                         onOpenClick = {
                             // Sinxronlash fayl yo'lini o'zgartirgan bo'lishi mumkin — bosilganda qayta aniqlaymiz.
                             (downloadedModelFile(context, model.id) ?: file)?.let {
@@ -360,13 +426,61 @@ fun ModelStoreScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    deleteDownloadedModel(context, model.id)
-                    downloadedVersion++
+                    val m = toDelete
                     toDelete = null
+                    if (m != null) {
+                        deleteDownloadedModel(context, m.id)
+                        CustomModelStore.remove(context, m.id)
+                        models = ModelCatalog.models
+                        downloadedVersion++
+                        Toast.makeText(context, tr("%1\$s o'chirildi", m.name), Toast.LENGTH_SHORT).show()
+                    }
                 }) { Text(tr("O'chirish"), color = DangerText) }
             },
             dismissButton = {
                 TextButton(onClick = { toDelete = null }) { Text(tr("Bekor qilish"), color = TextSecondary) }
+            }
+        )
+    }
+
+    toDeletePartial?.let { model ->
+        AlertDialog(
+            onDismissRequest = { toDeletePartial = null },
+            containerColor = BgCardElevated,
+            title = { Text(tr("Yuklangan qismi o'chirilsinmi?"), color = TextPrimary, fontSize = 17.sp) },
+            text = {
+                Text(
+                    tr("Modelning to'xtatilgan qismi o'chiriladi va xotiradan joy bo'shatiladi."),
+                    color = TextSecondary, fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val m = toDeletePartial
+                    toDeletePartial = null
+                    m?.let {
+                        deleteModelPartials(context, it.id)
+                        downloadedVersion++
+                        Toast.makeText(context, tr("Yuklangan qism o'chirildi"), Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text(tr("O'chirish"), color = DangerText) }
+            },
+            dismissButton = {
+                TextButton(onClick = { toDeletePartial = null }) { Text(tr("Bekor qilish"), color = TextSecondary) }
+            }
+        )
+    }
+
+    if (showAddCustomDialog) {
+        AddCustomModelDialog(
+            onDismiss = { showAddCustomDialog = false },
+            onModelAddedAndStartDownload = { newModel ->
+                models = ModelCatalog.models
+                onModelSelected(newModel)
+            },
+            onModelImported = { importedModel ->
+                models = ModelCatalog.models
+                downloadedVersion++
             }
         )
     }
@@ -410,11 +524,13 @@ private fun ModelCard(
     canStar: Boolean,
     onStarClick: () -> Unit,
     downloaded: Boolean,
+    partialBytes: Long = 0L,
     tooHeavy: Boolean,
     recommendedGb: Int?,
     activeDownload: ActiveDownload?,
     onViewDownload: () -> Unit,
     onDownloadClick: () -> Unit,
+    onCancelPartial: () -> Unit = {},
     onOpenClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
@@ -463,6 +579,15 @@ private fun ModelCard(
                 if (downloaded) {
                     Spacer(Modifier.height(6.dp))
                     Badge(text = tr("Yuklab olingan"), bg = SuccessGreenBg, fg = SuccessGreenText, icon = Icons.Filled.CheckCircle)
+                } else if (activeDownload != null || partialBytes > 0) {
+                    Spacer(Modifier.height(6.dp))
+                    val isActivelyRunning = activeDownload != null && !activeDownload.paused
+                    Badge(
+                        text = if (isActivelyRunning) tr("Yuklanmoqda") else tr("To'xtatilgan"),
+                        bg = AccentPurpleBg,
+                        fg = AccentPurpleText,
+                        icon = if (isActivelyRunning) Icons.Filled.Download else Icons.Filled.Pause
+                    )
                 }
             }
         }
@@ -529,28 +654,78 @@ private fun ModelCard(
                     Icon(Icons.Filled.Delete, contentDescription = tr("O'chirish"), tint = DangerText, modifier = Modifier.size(18.dp))
                 }
             }
-        } else if (activeDownload != null) {
-            // Shu model hozir yuklanmoqda (yoki pauzada) — progress + ekranni ochish tugmasi.
+        } else if (activeDownload != null || partialBytes > 0) {
+            val isActivelyRunning = activeDownload != null && !activeDownload.paused
+            val doneBytes = if (activeDownload != null && activeDownload.bytesDone > 0) activeDownload.bytesDone else partialBytes
+            val totalBytes = (model.totalDownloadSizeMb * 1024L * 1024L).coerceAtLeast(1L)
+            val percent = if (activeDownload != null) activeDownload.percent else ((doneBytes * 100) / totalBytes).toInt().coerceIn(0, 99)
+            val doneMb = doneBytes / (1024 * 1024)
+            val totalMb = model.totalDownloadSizeMb
+
             LinearProgressIndicator(
-                progress = activeDownload.percent / 100f,
+                progress = percent / 100f,
                 color = AccentPurple,
                 trackColor = BgCard,
                 modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
             )
             Spacer(Modifier.height(6.dp))
-            Text(
-                if (activeDownload.paused) tr("Pauzada: %1\$s%%", activeDownload.percent)
-                else tr("Yuklanmoqda: %1\$s%%", activeDownload.percent),
-                color = TextSecondary,
-                fontSize = 11.sp
-            )
-            Spacer(Modifier.height(10.dp))
-            PrimaryButton(
-                text = tr("Yuklanishni ko'rish"),
-                icon = Icons.Filled.Download,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = onViewDownload
-            )
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    if (isActivelyRunning) tr("Yuklanmoqda: %1\$s%%", percent)
+                    else tr("Pauzada: %1\$s%%", percent),
+                    color = if (isActivelyRunning) AccentPurpleText else TextSecondary,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "$doneMb / $totalMb MB",
+                    color = TextMuted,
+                    fontSize = 11.5.sp
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            if (isActivelyRunning) {
+                PrimaryButton(
+                    text = tr("Yuklanishni ko'rish"),
+                    icon = Icons.Filled.Download,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onViewDownload
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val remainingMb = (totalMb - doneMb).coerceAtLeast(0)
+                    PrimaryButton(
+                        text = tr("Davom etish (%1\$s MB qoldi)", remainingMb),
+                        icon = Icons.Filled.PlayArrow,
+                        modifier = Modifier.weight(1f),
+                        onClick = onDownloadClick
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(Sizing.radiusMd))
+                            .background(BgCardAlt)
+                            .border(1.dp, BorderColor, RoundedCornerShape(Sizing.radiusMd))
+                            .clickable(onClick = onCancelPartial),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = tr("Bekor qilish"),
+                            tint = DangerText,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
         } else {
             PrimaryButton(
                 text = tr("Yuklab olish (%1\$s MB)", model.totalDownloadSizeMb),
@@ -652,10 +827,16 @@ internal fun hasEnoughRam(context: Context, model: ModelItem): Boolean {
 }
 
 /** Do'kondagi kartada ko'rsatiladigan faol (ketayotgan yoki pauzadagi) yuklash. */
-private data class ActiveDownload(val modelId: String, val percent: Int, val paused: Boolean)
+private data class ActiveDownload(
+    val modelId: String,
+    val percent: Int,
+    val paused: Boolean,
+    val bytesDone: Long = 0L,
+    val bytesTotal: Long = 0L
+)
 
 private fun ModelDownloadState.toActive(): ActiveDownload? = when (this) {
-    is ModelDownloadState.Running -> ActiveDownload(modelId, progress.percent, false)
-    is ModelDownloadState.Paused -> ActiveDownload(modelId, progress.percent, true)
+    is ModelDownloadState.Running -> ActiveDownload(modelId, progress.percent, false, progress.bytesDone, progress.bytesTotal)
+    is ModelDownloadState.Paused -> ActiveDownload(modelId, progress.percent, true, progress.bytesDone, progress.bytesTotal)
     else -> null
 }

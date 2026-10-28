@@ -120,6 +120,7 @@ class ModelDownloadService : Service() {
                 }
                 if (generation.get() == gen) {
                     _state.value = ModelDownloadState.Success(model.id, file)
+                    ModelStarStore.recordDownload(this@ModelDownloadService, model.id)
                     ApiClient.event("download_ok", model.id)
                     notificationManager.notify(NOTIFICATION_ID, buildFinishedNotification(model.name, true, null))
                 }

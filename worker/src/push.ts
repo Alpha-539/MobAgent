@@ -1,5 +1,6 @@
 import { SignJWT, importPKCS8 } from "jose";
 import type { Env } from "./types";
+import { sanitizePrivateKey } from "./util";
 
 /**
  * Push-bildirishnoma (Firebase Cloud Messaging HTTP v1).
@@ -16,7 +17,7 @@ let cached: { token: string; exp: number } | null = null;
 async function accessToken(env: Env): Promise<string> {
   if (cached && Date.now() < cached.exp - 60_000) return cached.token;
   const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT ?? "") as { client_email: string; private_key: string };
-  const key = await importPKCS8(sa.private_key, "RS256");
+  const key = await importPKCS8(sanitizePrivateKey(sa.private_key), "RS256");
   const assertion = await new SignJWT({ scope: SCOPE })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
     .setIssuer(sa.client_email)

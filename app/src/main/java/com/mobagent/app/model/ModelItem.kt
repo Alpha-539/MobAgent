@@ -159,7 +159,11 @@ object ModelCatalog {
     @Volatile
     var remote: List<ModelItem>? = null
 
-    val models: List<ModelItem> get() = remote ?: builtIn
+    /** Foydalanuvchi qo'lda (Hugging Face yoki fayldan) qo'shgan modellar. */
+    @Volatile
+    var custom: List<ModelItem> = emptyList()
+
+    val models: List<ModelItem> get() = (remote ?: builtIn) + custom
 
     /** Server ishlamasa yoki hali olinmagan bo'lsa ishlatiladigan o'rnatilgan ro'yxat. */
     val builtIn = listOf(
@@ -356,5 +360,5 @@ object ModelCatalog {
     // Admin modelni katalogdan o'chirgan bo'lsa ham, telefonda yuklangan model ishlashda davom etishi uchun
     // o'rnatilgan ro'yxatga ham qaraymiz.
     fun byId(id: String?): ModelItem? =
-        models.firstOrNull { it.id == id } ?: builtIn.firstOrNull { it.id == id }
+        models.firstOrNull { it.id == id } ?: builtIn.firstOrNull { it.id == id } ?: custom.firstOrNull { it.id == id }
 }

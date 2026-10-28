@@ -3,7 +3,8 @@ import type { BudgetStatus } from "./budget";
 import { acknowledge, consumePurchase, getOneTimePurchase, getSubscription } from "./play";
 import { CLOUD_MODELS, CREDIT_ONLY_RANK, CREDIT_PRODUCTS, MICRO, PLANS, PRODUCT_TO_PLAN, byModelId, type CloudModel, type PlanId, type Provider } from "./plans";
 import type { Env } from "./types";
-import { json } from "./util";
+import { isCloudModeOff, publicCloudStatus } from "./cloudmode";
+import { base64UrlDecode, json } from "./util";
 import { loadOffModels } from "./cloudmodels";
 
 const MAX_BODY_BYTES = 8_000_000;
@@ -127,6 +128,10 @@ async function billingCredits(req: Request, env: Env): Promise<Response> {
     await env.DB.prepare("INSERT OR IGNORE INTO credit_purchases (purchase_token, uid, product_id, micro, consumed, created_at) VALUES (?1,?2,?3,?4,0,?5)")
       .bind(token, u.uid, productId, micro, Date.now()).run();
   }
+  // Race condition oldini olish: bazadagi haqiqiy egasi u.uid ekanligini tasdiqlaymiz
+  const verified = await env.DB.prepare("SELECT uid FROM credit_purchases WHERE purchase_token = ?").bind(token).first<{ uid: string }>();
+  if (verified && verified.uid !== u.uid) return errJson(409, "Bu xarid boshqa hisobga biriktirilgan", "purchase_owned");
+
   const stub = budgetOf(env, u.uid);
   await stub.grant(token, micro); // takroriy chaqiruvda qayta qo'shilmaydi
 
@@ -145,7 +150,8 @@ async function billingRtdn(req: Request, env: Env, url: URL): Promise<Response> 
   let voided = false;
   try {
     const msg = (await req.json()) as { message?: { data?: string } };
-    const data = JSON.parse(atob(msg.message?.data ?? "")) as {
+    const rawData = base64UrlDecode(msg.message?.data ?? "");
+    const data = JSON.parse(rawData) as {
       subscriptionNotification?: { purchaseToken?: string };
       voidedPurchaseNotification?: { purchaseToken?: string };
     };
@@ -244,10 +250,27 @@ function normalize(raw: unknown): Msg[] | string {
   return out;
 }
 
+/** Matn tokenlarini hisoblash: lotin/ASCII va ko'p baytli (kirill, arab va h.k.) tillarni adolatli hisoblaydi */
+export function estimateTextTokens(text: string): number {
+  if (!text) return 0;
+  let ascii = 0;
+  let nonAscii = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) <= 127) ascii++;
+    else nonAscii++;
+  }
+  return Math.ceil(ascii / 3.5 + nonAscii / 1.3);
+}
+
 const estimateInputTokens = (msgs: Msg[]): number => {
-  let chars = 0, imgs = 0;
-  for (const m of msgs) for (const p of m.parts) p.t === "text" ? (chars += p.text.length) : imgs++;
-  return Math.ceil(chars / 3) + imgs * IMAGE_TOKENS;
+  let tokens = 0, imgs = 0;
+  for (const m of msgs) {
+    for (const p of m.parts) {
+      if (p.t === "text") tokens += estimateTextTokens(p.text);
+      else imgs++;
+    }
+  }
+  return tokens + imgs * IMAGE_TOKENS;
 };
 
 const costMicro = (cm: CloudModel, inTok: number, outTok: number) => inTok * cm.inPerM + outTok * cm.outPerM;
@@ -407,6 +430,7 @@ async function pump(
 
   let buf = "";
   let outChars = 0;
+  let accumulatedOut = "";
   let usage: { inTok: number; outTok: number } | null = null;
   let aIn = 0, aOut = 0, aGot = false;
 
@@ -426,7 +450,7 @@ async function pump(
         if (!anth) {
           if (payload === "[DONE]") { await send("data: [DONE]\n\n"); continue; }
           type U = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
-          let o: { usage?: U; choices?: { delta?: { content?: unknown }; usage?: U }[] };
+          let o: { usage?: U; choices?: { delta?: { content?: unknown; reasoning_content?: unknown }; usage?: U }[] };
           try { o = JSON.parse(payload); } catch { continue; }
           // Moonshot (Kimi) ba'zan usage'ni choices[0].usage ichida qaytaradi
           const uo = o.usage ?? o.choices?.[0]?.usage;
@@ -436,13 +460,21 @@ async function pump(
             usage = { inTok: p, outTok: Math.max(uo.completion_tokens ?? 0, (uo.total_tokens ?? 0) - p) };
           }
           const d = o.choices?.[0]?.delta?.content;
-          if (typeof d === "string") outChars += d.length;
+          if (typeof d === "string") {
+            outChars += d.length;
+            accumulatedOut += d;
+          }
+          const r = o.choices?.[0]?.delta?.reasoning_content;
+          if (typeof r === "string") {
+            outChars += r.length;
+            accumulatedOut += r;
+          }
           await send(`data: ${payload}\n\n`);
         } else {
           let o: {
             type?: string;
             message?: { usage?: { input_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } };
-            delta?: { type?: string; text?: unknown; stop_reason?: string };
+            delta?: { type?: string; text?: unknown; thinking?: unknown; stop_reason?: string };
             usage?: { output_tokens?: number };
           };
           try { o = JSON.parse(payload); } catch { continue; }
@@ -450,9 +482,17 @@ async function pump(
             const u = o.message?.usage;
             aIn = (u?.input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0) + (u?.cache_read_input_tokens ?? 0);
             aGot = true;
-          } else if (o.type === "content_block_delta" && o.delta?.type === "text_delta" && typeof o.delta.text === "string") {
-            outChars += o.delta.text.length;
-            await send(chunk({ content: o.delta.text }, null));
+          } else if (o.type === "content_block_delta") {
+            const dt = o.delta?.type;
+            if (dt === "text_delta" && typeof o.delta?.text === "string") {
+              outChars += o.delta.text.length;
+              accumulatedOut += o.delta.text;
+              await send(chunk({ content: o.delta.text }, null));
+            } else if (dt === "thinking_delta" && typeof o.delta?.thinking === "string") {
+              outChars += o.delta.thinking.length;
+              accumulatedOut += o.delta.thinking;
+              await send(chunk({ reasoning_content: o.delta.thinking }, null));
+            }
           } else if (o.type === "message_delta") {
             if (typeof o.usage?.output_tokens === "number") aOut = o.usage.output_tokens;
             if (o.delta?.stop_reason) await send(chunk({}, o.delta.stop_reason === "max_tokens" ? "length" : "stop"));
@@ -470,8 +510,9 @@ async function pump(
   } finally {
     try { await writer.close(); } catch { /* */ }
     if (anth && aGot) usage = { inTok: aIn, outTok: aOut };
-    // Usage kelmasa (uzilish): kirish bahosi + olingan matndan chiqish bahosi (~3 belgi/token).
-    const cost = usage ? costMicro(cm, usage.inTok, usage.outTok) : costMicro(cm, estIn, Math.ceil(outChars / 3));
+    // Usage kelmasa (uzilish): kirish bahosi + olingan matndan adolatli ko'p tilli chiqish bahosi.
+    const fallbackOut = estimateTextTokens(accumulatedOut) || Math.ceil(outChars / 3);
+    const cost = usage ? costMicro(cm, usage.inTok, usage.outTok) : costMicro(cm, estIn, fallbackOut);
     try { await stub.settle(reqId, cost); } catch { console.error("settle failed"); }
     try { await recordSpend(env, cm.provider, cost); } catch { console.error("recordSpend failed"); }
   }
@@ -483,6 +524,14 @@ async function pump(
 
 export async function handleCloud(req: Request, env: Env, ctx: ExecutionContext, path: string, url: URL): Promise<Response | null> {
   const m = req.method;
+  if (m === "GET" && path === "/cloud/status") return publicCloudStatus(env);
+  // Admin pullik rejimni o'chirgan ("Tez orada"): chat, xarid va tarif so'rovlari rad etiladi.
+  // billingRtdn ATAYLAB bu yerda emas — Google Play bildirishnomalari qabul qilinaveradi.
+  const cloudPath = (m === "POST" && (path === "/v1/chat/completions" || path === "/billing/verify" || path === "/billing/credits"))
+    || (m === "GET" && (path === "/v1/models" || path === "/me/plan"));
+  if (cloudPath && (await isCloudModeOff(env))) {
+    return errJson(503, "Pullik rejim tez orada ishga tushadi", "cloud_coming_soon");
+  }
   if (m === "POST" && path === "/v1/chat/completions") return chatCompletions(req, env, ctx);
   if (m === "POST" && path === "/billing/verify") return billingVerify(req, env);
   if (m === "POST" && path === "/billing/credits") return billingCredits(req, env);
@@ -556,6 +605,7 @@ export async function adminCloudOverview(env: Env): Promise<Response> {
     expiring7d: expiring,
     spend,
     unacked: unacked?.n ?? 0,
+    cloudModeOff: await isCloudModeOff(env, true),
     keys: {
       anthropic: !!env.ANTHROPIC_API_KEY, openai: !!env.OPENAI_API_KEY, gemini: !!env.GEMINI_API_KEY, moonshot: !!env.MOONSHOT_API_KEY, deepseek: !!env.DEEPSEEK_API_KEY,
       playServiceAccount: !!env.PLAY_SERVICE_ACCOUNT, rtdnSecret: !!env.RTDN_SECRET,

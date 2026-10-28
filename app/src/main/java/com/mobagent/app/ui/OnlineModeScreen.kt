@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +40,9 @@ fun OnlineModeScreen(
     onMenuClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    // Admin pullik rejimni o'chirgan bo'lsa — "Tez orada" ko'rsatiladi va kartani bosib bo'lmaydi.
+    LaunchedEffect(Unit) { com.mobagent.app.billing.CloudStatus.refresh() }
+    val comingSoon = com.mobagent.app.billing.CloudStatus.comingSoon
     val savedKeys = remember(com.mobagent.app.auth.AuthRepository.user?.uid) { ApiKeyStore.savedCount(context) }
 
     Column(
@@ -73,7 +77,8 @@ fun OnlineModeScreen(
                 .clip(RoundedCornerShape(14.dp))
                 .background(BgCard)
                 .border(0.5.dp, AccentPurple, RoundedCornerShape(14.dp))
-                .clickable { onConfirm(OnlineChoice.AppProvided) }
+                .clickable(enabled = !comingSoon) { onConfirm(OnlineChoice.AppProvided) }
+                .alpha(if (comingSoon) 0.6f else 1f)
                 .padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -84,7 +89,7 @@ fun OnlineModeScreen(
                         .background(AccentPurpleBg)
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    Text(tr("Pullik"), color = AccentPurpleText, fontSize = 11.sp)
+                    Text(tr(if (comingSoon) "Tez orada" else "Pullik"), color = AccentPurpleText, fontSize = 11.sp)
                 }
             }
             Text(tr("Kalit kerak emas, obuna orqali ishlaydi"), color = TextSecondary, fontSize = 12.sp)

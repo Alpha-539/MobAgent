@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -18,8 +21,8 @@ android {
         // Google Play: yangi ilova/yangilanishlar 2026-08-31 dan API 36 ni talab qiladi.
         targetSdk = 36
         // Google Play har yuklashda versionCode oshishini talab qiladi: CI da VERSION_CODE beriladi.
-        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 2
-        versionName = "0.1.0"
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = "1.0.0"
 
         externalNativeBuild {
             cmake {
@@ -37,17 +40,15 @@ android {
                     // Bu ilova Debug APK sifatida qurilsa ham, native tomon
                     // doim Release (optimallashtirilgan) bo'lishi kerak.
                     "-DCMAKE_BUILD_TYPE=Release",
-                    // TEZLIK: CPU variantlari (dotprod/i8mm/...) CMakeLists.txt'da
-                    // GGML_CPU_ALL_VARIANTS bilan quriladi va ish vaqtida tanlanadi;
-                    // statik GGML_CPU_ARM_ARCH bu yerdan olib tashlandi.
                     "-DGGML_NATIVE=OFF",
-                    "-DGGML_LLAMAFILE=ON"
+                    "-DGGML_LLAMAFILE=ON",
+                    "-DGGML_OPENMP=OFF"
                     // GGML_VULKAN ni olib tashlandi - CMakeLists.txt'da o'rnatiladi
                 )
             }
         }
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -68,14 +69,27 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
-        // Release kaliti GitHub Secrets orqali (KEYSTORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD) beriladi.
+        // Release kaliti: lokal keystore.properties fayli yoki GitHub Secrets (KEYSTORE_FILE va h.k.) orqali beriladi.
         create("release") {
-            val ks = System.getenv("KEYSTORE_FILE")
-            if (!ks.isNullOrBlank() && file(ks).exists()) {
-                storeFile = file(ks)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+            val propFile = rootProject.file("keystore.properties").takeIf { it.exists() } ?: file("keystore.properties").takeIf { it.exists() }
+            if (propFile != null) {
+                val props = Properties().apply { propFile.inputStream().use { load(it) } }
+                val storePath = props.getProperty("storeFile")
+                if (!storePath.isNullOrBlank()) {
+                    val f = File(storePath)
+                    storeFile = if (f.isAbsolute) f else file(storePath)
+                    storePassword = props.getProperty("storePassword")
+                    keyAlias = props.getProperty("keyAlias")
+                    keyPassword = props.getProperty("keyPassword")
+                }
+            } else {
+                val ks = System.getenv("KEYSTORE_FILE")
+                if (!ks.isNullOrBlank() && file(ks).exists()) {
+                    storeFile = file(ks)
+                    storePassword = System.getenv("KEYSTORE_PASSWORD")
+                    keyAlias = System.getenv("KEY_ALIAS")
+                    keyPassword = System.getenv("KEY_PASSWORD")
+                }
             }
         }
     }

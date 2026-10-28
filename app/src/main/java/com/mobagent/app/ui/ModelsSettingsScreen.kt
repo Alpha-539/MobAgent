@@ -2,6 +2,7 @@ package com.mobagent.app.ui
 
 import com.mobagent.app.i18n.mirrorInRtl
 import com.mobagent.app.i18n.tr
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mobagent.app.model.CustomModelStore
 import com.mobagent.app.model.ModelCatalog
 import com.mobagent.app.model.ModelItem
 import com.mobagent.app.model.deleteDownloadedModel
@@ -47,6 +49,11 @@ fun ModelsSettingsScreen(onBack: () -> Unit, onOpenStore: () -> Unit) {
     val cardShape = RoundedCornerShape(Sizing.radiusMd)
     var version by remember { mutableIntStateOf(0) }
     var toDelete by remember { mutableStateOf<ModelItem?>(null) }
+
+    LaunchedEffect(Unit) {
+        ModelCatalog.custom = CustomModelStore.load(context)
+        version++
+    }
 
     val items: List<Pair<ModelItem, Long>> = remember(version) {
         ModelCatalog.models.mapNotNull { m -> downloadedModelFile(context, m.id)?.let { m to it.length() } }
@@ -147,9 +154,14 @@ fun ModelsSettingsScreen(onBack: () -> Unit, onOpenStore: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    deleteDownloadedModel(context, model.id)
+                    val m = toDelete
                     toDelete = null
-                    version++
+                    if (m != null) {
+                        deleteDownloadedModel(context, m.id)
+                        CustomModelStore.remove(context, m.id)
+                        version++
+                        Toast.makeText(context, tr("%1\$s o'chirildi", m.name), Toast.LENGTH_SHORT).show()
+                    }
                 }) { Text(tr("O'chirish"), color = DangerText) }
             },
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text(tr("Bekor qilish"), color = TextSecondary) } }

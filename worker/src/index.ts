@@ -11,7 +11,7 @@ import { errorPage, wantsHtml } from "./errorpage";
 import { ensureDb } from "./db-init";
 import { cloudScheduled, handleCloud, wipeCloudUser } from "./cloud";
 export { UserBudget } from "./budget";
-import { html, json } from "./util";
+import { CORS_HEADERS, html, json } from "./util";
 import { METRICS, type Env } from "./types";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -80,6 +80,11 @@ function adminPrefix(env: Env): { mode: "secret"; prefix: string } | { mode: "cl
 }
 
 async function handle(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  // CORS Preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   const url = new URL(req.url);
   let path = url.pathname.replace(/\/+$/, "") || "/";
   const m = req.method;

@@ -44,7 +44,7 @@ const EMPTY: State = {
   planId: null, validUntil: 0, monthStart: 0, monthSpent: 0, weekStart: 0, weekSpent: 0,
   winStart: 0, winSpent: 0, reserved: {}, credits: 0, grants: [],
 };
-const STALE_RESERVATION_MS = 10 * 60_000;
+const STALE_RESERVATION_MS = 2 * 60_000;
 
 /** Har foydalanuvchiga bitta nusxa (idFromName(uid)). Byudjet hisobi shu yerda aniq (ketma-ket) bajariladi. */
 export class UserBudget extends DurableObject<Env> {

@@ -158,6 +158,8 @@ nav::-webkit-scrollbar{display:none}
 </section>
 
 <section id="plans" hidden>
+ <h2>Pullik rejim</h2>
+ <div class="card" id="cloudMode" style="padding:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"></div>
  <div class="grid" id="planCards"></div>
  <h2>Pullik modellar</h2>
  <div class="card scroll"><table><thead><tr><th>Model</th><th>Provayder</th><th>Daraja</th><th>Min. tarif</th><th>Narx (1M token, kirish / chiqish)</th><th>Holat</th></tr></thead><tbody id="cloudRows"></tbody></table></div>
@@ -416,12 +418,16 @@ async function act(a,b){try{await api("POST","/cloud/"+a,b);say("Bajarildi");awa
 
 /* ---------- Tariflar ---------- */
 async function loadPlans(){try{var c=await api("GET","/cloud/overview"),g=$("planCards");clear(g);
+ var cm=$("cloudMode");clear(cm);cm.appendChild(pill(c.cloudModeOff?"O'chirilgan — ilovada «Tez orada»":"Yoqilgan",c.cloudModeOff?"bad":"ok"));
+ cm.appendChild(h("button",{class:c.cloudModeOff?"s":"s d",type:"button",onclick:function(){cloudModeToggle(!!c.cloudModeOff)}},[c.cloudModeOff?"Yoqish":"O'chirish"]));
  c.plans.forEach(function(p){g.appendChild(h("div",{class:"stat"},[h("b",{},[PLAN_NAME[p.id]]),h("span",{},["Oylik API byudjet: $"+p.monthlyUsd+" · daraja "+p.rank]),h("div",{style:"margin-top:8px"},[pill(c.byPlan[p.id]+" faol obuna")])]))});
  var b=$("cloudRows");clear(b);c.models.forEach(function(m){var tr=h("tr",{class:m.enabled?"":"off"});td(tr,m.name);td(tr,m.provider);td(tr,m.tier=="strong"?"Kuchli":"O'rtacha");
   td(tr,Object.keys(PLAN_NAME)[m.minRank-1]?PLAN_NAME[Object.keys(PLAN_NAME)[m.minRank-1]]:String(m.minRank));td(tr,"$"+m.inPerM+" / $"+m.outPerM,"mono");
   var sc=td(tr,"");sc.appendChild(pill(m.enabled?"ishlayapti":m.codeOff?"kodda o'chiq":!m.keyed?"kalit yo'q":"o'chirilgan",m.enabled?"ok":"bad"));
   if(m.keyed&&!m.codeOff){sc.appendChild(document.createTextNode(" "));sc.appendChild(h("button",{class:m.off?"s":"s d",type:"button",onclick:function(){cloudToggle(m)}},[m.off?"Yoqish":"O'chirish"]))}
   b.appendChild(tr)})}catch(e){say(e.message,1)}}
+async function cloudModeToggle(wasOff){if(!wasOff&&!confirm("Butun pullik rejim o'chiriladi: ilovada «Tez orada» ko'rinadi, chat va xaridlar rad etiladi. Davom etasizmi?"))return;
+ try{await api("PUT","/cloud-mode",{enabled:!!wasOff});say(wasOff?"Pullik rejim yoqildi":"Pullik rejim o'chirildi");loadPlans()}catch(e){say(e.message,1)}}
 async function cloudToggle(m){if(!m.off&&!confirm("«"+m.name+"» ilovada ko'rinmay qoladi va so'rovlar rad etiladi. O'chirilsinmi?"))return;
  try{await api("PUT","/cloud-models",{id:m.id,enabled:!!m.off});say(m.off?"Yoqildi":"O'chirildi");loadPlans()}catch(e){say(e.message,1)}}
 

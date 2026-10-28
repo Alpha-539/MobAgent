@@ -1,4 +1,5 @@
 import { ADMIN_HTML } from "./admin-html";
+import { handleCloudMode } from "./cloudmode";
 import { html, json } from "./util";
 import { METRICS, type Env } from "./types";
 import { validateModel } from "./validate";
@@ -104,6 +105,12 @@ export async function handleAdmin(req: Request, env: Env, path: string, authed: 
   // ---- Pullik (provayder API) modellarini yoqish/o'chirish ----
   if (path === "/admin/api/cloud-models") {
     const r = await handleCloudModels(env, req, path, actor);
+    if (r) return r;
+  }
+
+  // ---- Butun pullik rejimni yoqish/o'chirish ("Tez orada") ----
+  if (path === "/admin/api/cloud-mode") {
+    const r = await handleCloudMode(env, req, path, actor);
     if (r) return r;
   }
 

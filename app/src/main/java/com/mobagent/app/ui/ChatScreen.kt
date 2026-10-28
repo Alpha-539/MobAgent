@@ -1292,10 +1292,8 @@ fun ChatScreen(
                         // Taxminan 5 ta qator ko'rinadi, qolganlari aylantiriladi (menyu ichida o'zi scroll qiladi).
                         modifier = Modifier.background(BgCardElevated).widthIn(max = 280.dp).heightIn(max = 300.dp)
                     ) {
-                        val models = cloudPlan?.models.orEmpty()
-                        if (models.isEmpty()) {
-                            DropdownMenuItem(text = { Text(tr("Yuklanmoqda..."), color = TextMuted, fontSize = 13.sp) }, onClick = {}, enabled = false)
-                        }
+                        val serverModels = cloudPlan?.models.orEmpty()
+                        val models = if (serverModels.isNotEmpty()) serverModels else DEFAULT_FALLBACK_CLOUD_MODELS
                         models.sortedBy { it.tier != "medium" }.forEach { m ->
                             // Tarifsiz foydalanuvchi hamma modelni ko'ra va tanlay oladi; qulf faqat tarifi pastroq bo'lsa.
                             val lockedForUser = (cloudPlan?.planId != null || (cloudPlan?.credits ?: 0L) > 0L) && m.locked
@@ -1333,6 +1331,13 @@ fun ChatScreen(
     }
     }
 }
+
+private val DEFAULT_FALLBACK_CLOUD_MODELS = listOf(
+    com.mobagent.app.billing.CloudModelInfo("claude-haiku-4-5", "Claude Haiku 4.5", "medium", false),
+    com.mobagent.app.billing.CloudModelInfo("gpt-5-4-mini", "GPT-5.4 mini", "medium", false),
+    com.mobagent.app.billing.CloudModelInfo("gpt-6-luna", "GPT-6 Luna", "medium", false),
+    com.mobagent.app.billing.CloudModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", "medium", false)
+)
 
 /** Model tanlash menyusidagi qisqa izoh (o'zbekcha kalit; tr() bilan tarjima qilinadi). */
 private fun cloudModelNote(id: String, tier: String): String = when {

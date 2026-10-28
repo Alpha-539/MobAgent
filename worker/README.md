@@ -90,3 +90,4 @@ Admin → **E'lonlar** → yangi e'lon formasida «Bildirishnoma (push)» = *Ha*
 - Kerak: `FIREBASE_SERVICE_ACCOUNT` secret (xat yuborish uchun qo'yilgan o'sha) va Google Cloud'da **Firebase Cloud Messaging API** yoqilgan bo'lishi (Firebase loyihalarida odatda yoqilgan).
 - Foydalanuvchi yangi ilovani bir marta ochib, bildirishnomaga ruxsat berishi kerak (Android 13+). Eski versiyadagilarga bormaydi.
 
+## helo

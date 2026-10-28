@@ -98,10 +98,10 @@ jobs:
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
           export KEYSTORE_FILE="$RUNNER_TEMP/upload.jks"
-
+          
           # Ham AAB, ham Release APK yig'iladi
           gradle bundleRelease assembleRelease --stacktrace
-
+          
           rm -f "$RUNNER_TEMP/upload.jks"
 
       # 3. Google Play uchun tayyor AAB faylni yuklash

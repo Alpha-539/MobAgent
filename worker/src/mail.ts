@@ -10,19 +10,32 @@ export async function sendMail(env: Env, m: Mail): Promise<void> {
   const addr = env.MAIL_FROM;
   if (!addr) throw new Error("MAIL_FROM sozlanmagan");
   const from = { email: addr, name: env.APP_NAME || "App" };
+  let lastError: unknown = null;
+
   if (env.EMAIL) {
-    await env.EMAIL.send({ to: m.to, from, subject: m.subject, html: m.html, text: m.text });
-    return;
+    try {
+      await env.EMAIL.send({ to: m.to, from, subject: m.subject, html: m.html, text: m.text });
+      return;
+    } catch (e) {
+      console.error("Cloudflare EMAIL send failed:", e);
+      lastError = e;
+    }
   }
+
   if (env.RESEND_API_KEY) {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
       body: JSON.stringify({ from: `${from.name} <${from.email}>`, to: [m.to], subject: m.subject, html: m.html, text: m.text }),
     });
-    if (!r.ok) throw new Error(`Resend xatosi: ${r.status}`);
+    if (!r.ok) {
+      const errText = await r.text().catch(() => "");
+      throw new Error(`Resend xatosi: ${r.status} ${errText}`);
+    }
     return;
   }
+
+  if (lastError) throw lastError;
   throw new Error("Xat yuboruvchi (EMAIL binding yoki RESEND_API_KEY) topilmadi");
 }
 
